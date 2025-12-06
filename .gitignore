@@ -11,9 +11,17 @@ lerna-debug.log*
 node_modules
 
 # Build output
-dist
-dist-ssr
+dist/
+dist-ssr/
+dist_portable/
+releases/
 *.local
+
+# Installer and packages
+*.exe
+*.msi
+*.zip
+*.tar.gz
 
 # Rust/Tauri
 src-tauri/target/
@@ -26,6 +34,7 @@ src/PhotoWall.Imaging/
 .vscode/
 .idea/
 .qoder/
+.claude/
 .DS_Store
 *.suo
 *.ntvs*
@@ -61,11 +70,6 @@ ui仿照/
 优化建议/
 
 # Internal development docs
-开发规范文档.md
-开发阶段规划.md
-技术设计文档.md
-环境与依赖说明.md
+docs/
 
-# AI assistant configs
-CLAUDE.md
-AGENTS.md
+# AI assistant configs (moved to docs/)
