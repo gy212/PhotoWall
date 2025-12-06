@@ -39,16 +39,31 @@ PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能�
 
 ## 安装说明
 
-### 方式一：安装程序（推荐）
+### 从源码构建
 
-1. 双击运行 `PhotoWall_x.x.x_x64-setup.exe`
-2. 按照安装向导的提示完成安装
-3. 安装完成后，可从开始菜单或桌面快捷方式启动程序
+**环境要求**：
+- Node.js 18+
+- Rust 1.70+
+- pnpm 或 npm
 
-### 方式二：便携版
+**构建步骤**：
 
-1. 解压 `PhotoWall-Portable-vx.x.x.zip` 到任意文件夹
-2. 直接运行 `photowall.exe` 即可使用
+```bash
+# 克隆仓库
+git clone https://github.com/your-username/PhotoWall.git
+cd PhotoWall
+
+# 安装依赖
+npm install
+
+# 开发模式运行
+npm run tauri dev
+
+# 构建生产版本
+npm run tauri build
+```
+
+构建完成后，安装包位于 `src-tauri/target/release/bundle/`
 
 ---
 
@@ -56,7 +71,7 @@ PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能�
 
 ### 第一次使用
 
-1. **启动程序**：双击桌面图标或从开始菜单启动 PhotoWall
+1. **启动程序**：运行构建后的应用或使用 `npm run tauri dev` 开发模式
 
 2. **添加照片文件夹**：
    - 进入「设置」页面
