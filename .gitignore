@@ -1,0 +1,71 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Rust/Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# C# Imaging project (optional component)
+src/PhotoWall.Imaging/
+
+# Editor directories and files
+.vscode/
+.idea/
+.qoder/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test
+coverage/
+
+# Database and cache
+*.db
+*.db-shm
+*.db-wal
+AppData/
+PhotoWallData/
+
+# Temporary files
+*.tmp
+*.temp
+nul
+
+# Reference/Design files (not essential)
+ui仿照/
+优化建议/
+
+# Internal development docs
+开发规范文档.md
+开发阶段规划.md
+技术设计文档.md
+环境与依赖说明.md
+
+# AI assistant configs
+CLAUDE.md
+AGENTS.md

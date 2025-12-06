@@ -1,0 +1,73 @@
+[package]
+name = "photowall"
+version = "0.1.0"
+description = "PhotoWall - Windows照片管理软件"
+authors = ["PhotoWall Team"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "photowall_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri 框架
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+
+# 序列化
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 异步运行时
+tokio = { version = "1", features = ["full"] }
+
+# 数据库
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# 图像处理
+image = "0.25"
+
+# RAW 格式解码
+rawloader = "0.37"
+
+# 元数据提取
+kamadak-exif = "0.6"
+
+# 文件系统
+walkdir = "2"
+notify = "7"
+
+# 正则表达式 (解析文件名中的日期)
+regex = "1"
+
+# 并行处理
+rayon = "1"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# 错误处理
+thiserror = "2"
+anyhow = "1"
+
+# 哈希计算
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+# 目录路径
+dirs = "5"
+
+# 回收站支持
+trash = "5"
+
+[dev-dependencies]
+tempfile = "3"
+

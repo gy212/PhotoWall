@@ -1,0 +1,347 @@
+@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@theme {
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-foreground: var(--color-secondary-foreground);
+  --color-muted: var(--color-muted);
+  --color-muted-foreground: var(--color-muted-foreground);
+  --color-border: var(--color-border);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  :root {
+    /* === 新UI设计色系 === */
+    --primary: #007aff;
+    --primary-light: #e6f2ff;
+    --primary-dark: #005ec4;
+    
+    /* 背景色 */
+    --bg-base: #f8f9fc;
+    --bg-sidebar: #f0f2f7;
+    --bg-surface: #ffffff;
+    --bg-element: #eef0f4;
+    --bg-hover: #e4e7ee;
+    
+    /* 文本颜色 */
+    --text-primary: #1c1e21;
+    --text-secondary: #6b7280;
+    --text-tertiary: #8e8e93;
+    
+    /* 边框颜色 */
+    --border-color: #dfe3eb;
+    --border-light: #e5e5ea;
+    
+    /* 语义色 */
+    --color-background: var(--bg-base);
+    --color-surface: var(--bg-surface);
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-dark);
+    --color-primary-foreground: #ffffff;
+    --color-secondary: var(--text-secondary);
+    --color-secondary-foreground: var(--text-primary);
+    --color-muted: var(--text-tertiary);
+    --color-muted-foreground: var(--text-tertiary);
+    --color-border: var(--border-color);
+    
+    --radius: 0.75rem;
+  }
+
+  /* === 深色主题 === */
+  .dark {
+    --bg-base: #101922;
+    --bg-sidebar: #1a2332;
+    --bg-surface: #1e2738;
+    --bg-element: #2a3544;
+    --bg-hover: #3a4554;
+    
+    --text-primary: #f5f5f7;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    
+    --border-color: #3a4554;
+    --border-light: #2a3544;
+    
+    --color-background: var(--bg-base);
+    --color-surface: var(--bg-surface);
+    --color-primary: var(--primary);
+    --color-primary-hover: #3395ff;
+    --color-primary-foreground: #ffffff;
+    --color-secondary: var(--text-secondary);
+    --color-secondary-foreground: var(--text-primary);
+    --color-muted: var(--text-tertiary);
+    --color-muted-foreground: var(--text-tertiary);
+    --color-border: var(--border-color);
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+}
+
+@layer utilities {
+  /* Material Symbols配置 */
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    font-size: 22px;
+  }
+  
+  .material-symbols-outlined.filled {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* 侧边栏样式 */
+  .sidebar {
+    background: rgba(var(--bg-sidebar), 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* 侧边栏导航项 */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+  }
+
+  .nav-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .nav-item.active {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .dark .nav-item.active {
+    background: rgba(0, 122, 255, 0.2);
+    color: #3395ff;
+  }
+
+  /* 主内容面板 */
+  .main-panel {
+    background: var(--bg-surface);
+    border-radius: 0.75rem;
+  }
+
+  /* 卡片样式 */
+  .card {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid var(--border-light);
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+  }
+
+  .dark .card {
+    background: rgba(30, 39, 56, 0.7);
+    border-color: var(--border-color);
+  }
+
+  /* 按钮样式 */
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: var(--primary-dark);
+  }
+
+  .btn-secondary {
+    background: var(--bg-element);
+    color: var(--text-primary);
+  }
+
+  .btn-secondary:hover {
+    background: var(--bg-hover);
+  }
+
+  .btn-danger {
+    background: #ef4444;
+    color: white;
+  }
+
+  .btn-danger:hover {
+    background: #dc2626;
+  }
+
+  /* 输入框样式 */
+  .input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--bg-element);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input:focus {
+    outline: none;
+    ring: 2px solid var(--primary);
+  }
+
+  /* 搜索框 */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: var(--bg-element);
+    border-radius: 0.5rem;
+    padding: 0 1rem;
+    height: 2.75rem;
+  }
+
+  /* 视图切换器 */
+  .view-toggle {
+    display: flex;
+    align-items: center;
+    background: var(--bg-element);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    height: 2.5rem;
+  }
+
+  .view-toggle-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .view-toggle-item.active {
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  /* 开关样式 */
+  .switch {
+    position: relative;
+    width: 2.75rem;
+    height: 1.5rem;
+    background: var(--bg-element);
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .switch.active {
+    background: var(--primary);
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: white;
+    border-radius: 9999px;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .switch.active::after {
+    transform: translateX(1.25rem);
+  }
+
+  /* 照片网格 */
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .photo-item {
+    aspect-ratio: 1;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  /* 时间线分组标题 */
+  .timeline-header {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+  }
+
+  /* Scrollbar hiding */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* 兼容旧样式 */
+  .neu-btn {
+    background: var(--bg-element);
+    border-radius: 0.5rem;
+    border: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+
+  .neu-btn:hover {
+    background: var(--bg-hover);
+  }
+
+  .neu-pressed {
+    background-color: var(--bg-element);
+    border-radius: 0.5rem;
+  }
+
+  .nav-active {
+    background: var(--primary-light);
+    color: var(--primary);
+  }
+
+  .dark .nav-active {
+    background: rgba(0, 122, 255, 0.2);
+    color: #3395ff;
+  }
+}
