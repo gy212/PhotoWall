@@ -34,7 +34,7 @@ use commands::{
     remove_all_photos_from_album, get_photo_ids_in_album, get_albums_for_photo, set_album_cover,
     reorder_album_photos, remove_photos_from_album,
     // thumbnails
-    generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail,
+    generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
@@ -161,6 +161,7 @@ pub fn run() {
             enqueue_thumbnail,
             enqueue_thumbnails_batch,
             cancel_thumbnail,
+            get_thumbnail_cache_path,
             // file_ops
             import_photos,
             export_photos,

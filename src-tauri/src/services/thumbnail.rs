@@ -2,8 +2,10 @@
 //!
 //! 负责生成、缓存和管理照片缩略图
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, Condvar};
 use image::{DynamicImage, ImageFormat, imageops::FilterType, RgbImage};
 use crate::utils::error::{AppError, AppResult};
 
@@ -60,11 +62,19 @@ pub struct ThumbnailResult {
     pub generation_time_ms: Option<u64>,
 }
 
+/// 正在生成中的缩略图追踪（用于去重）
+struct InFlightTracker {
+    /// 正在生成的缩略图 key 集合 (file_hash_size)
+    in_flight: HashSet<String>,
+}
+
 /// 缩略图服务
 #[derive(Clone)]
 pub struct ThumbnailService {
     /// 缓存根目录
     cache_dir: PathBuf,
+    /// 正在生成中的缩略图追踪（全局去重）
+    in_flight: Arc<(Mutex<InFlightTracker>, Condvar)>,
 }
 
 /// CFA 信息结构（用于 Bayer 去马赛克）
@@ -90,7 +100,20 @@ impl ThumbnailService {
     pub fn new(cache_dir: PathBuf) -> AppResult<Self> {
         // 确保缓存目录存在
         Self::ensure_cache_dirs(&cache_dir)?;
-        Ok(Self { cache_dir })
+        Ok(Self {
+            cache_dir,
+            in_flight: Arc::new((
+                Mutex::new(InFlightTracker {
+                    in_flight: HashSet::new(),
+                }),
+                Condvar::new(),
+            )),
+        })
+    }
+
+    /// 生成缓存 key
+    fn cache_key(file_hash: &str, size: ThumbnailSize) -> String {
+        format!("{}_{}", file_hash, size.name())
     }
 
     /// 确保缓存目录结构存在
@@ -128,6 +151,7 @@ impl ThumbnailService {
     /// 生成或获取缩略图
     ///
     /// 如果缓存中存在，直接返回缓存路径；否则生成新的缩略图
+    /// 使用去重机制确保同一张图 + 同一尺寸在同一时间只生成一次
     pub fn get_or_generate(
         &self,
         source_path: &Path,
@@ -146,9 +170,40 @@ impl ThumbnailService {
             });
         }
 
-        // 生成缩略图
+        let key = Self::cache_key(file_hash, size);
+        let (lock, cvar) = &*self.in_flight;
+
+        // 尝试获取生成权限，如果已有其他线程在生成则等待
+        {
+            let mut tracker = lock.lock().unwrap();
+            while tracker.in_flight.contains(&key) {
+                // 等待其他线程完成生成
+                tracker = cvar.wait(tracker).unwrap();
+                // 再次检查缓存（可能已被其他线程生成）
+                if cache_path.exists() {
+                    return Ok(ThumbnailResult {
+                        path: cache_path,
+                        hit_cache: true,
+                        generation_time_ms: None,
+                    });
+                }
+            }
+            // 标记为正在生成
+            tracker.in_flight.insert(key.clone());
+        }
+
+        // 生成缩略图（在锁外执行，避免阻塞其他任务）
         let start = std::time::Instant::now();
-        self.generate(source_path, file_hash, size)?;
+        let result = self.generate(source_path, file_hash, size);
+
+        // 生成完成，移除标��并通知等待的线程
+        {
+            let mut tracker = lock.lock().unwrap();
+            tracker.in_flight.remove(&key);
+            cvar.notify_all();
+        }
+
+        result?;
         let elapsed = start.elapsed().as_millis() as u64;
 
         tracing::info!(
@@ -202,19 +257,24 @@ impl ThumbnailService {
         let img = self.apply_orientation(source_path, img);
 
         // 生成缩略图（保持宽高比）
+        // 使用 Triangle 滤波器替代 Lanczos3，性能更好且网格缩略图观感差异很小
         let dim = size.dimensions();
-        let thumbnail = img.resize(dim, dim, FilterType::Lanczos3);
+        let thumbnail = img.resize(dim, dim, FilterType::Triangle);
 
-        // 保存为 WebP 格式
+        // 保存为 WebP 格式（原子写入：先写 .tmp 再 rename，避免并发/中断导致坏缓存）
         let cache_path = self.get_cache_path(file_hash, size);
+        let tmp_path = cache_path.with_extension("webp.tmp");
 
         // 确保父目录存在
         if let Some(parent) = cache_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        // 保存缩略图
-        thumbnail.save_with_format(&cache_path, ImageFormat::WebP)?;
+        // 先写入临时文件
+        thumbnail.save_with_format(&tmp_path, ImageFormat::WebP)?;
+
+        // 原子重命名到最终路径
+        fs::rename(&tmp_path, &cache_path)?;
 
         Ok(cache_path)
     }

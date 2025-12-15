@@ -122,6 +122,29 @@ pub async fn cancel_thumbnail(
     Ok(())
 }
 
+/// 检查缩略图缓存是否存在，存在则返回路径
+#[tauri::command]
+pub async fn get_thumbnail_cache_path(
+    _state: State<'_, AppState>,
+    file_hash: String,
+    size: Option<String>,
+) -> Result<Option<String>, CommandError> {
+    let size = size
+        .as_deref()
+        .and_then(ThumbnailSize::from_str)
+        .unwrap_or(ThumbnailSize::Medium);
+
+    let cache_dir = ThumbnailService::default_cache_dir();
+    let service = ThumbnailService::new(cache_dir)
+        .map_err(|e| CommandError::from(e))?;
+
+    if service.is_cached(&file_hash, size) {
+        Ok(Some(service.get_cache_path(&file_hash, size).to_string_lossy().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
 /// 缩略图任务输入（用于批量入队）
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

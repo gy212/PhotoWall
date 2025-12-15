@@ -216,7 +216,7 @@ export function useThumbnail(
         let result: ThumbnailResult;
 
         if (opts.useQueue) {
-          // 使用优先级队列（异步生成，需要轮询或等待）
+          // 使用优先级队列：入队后轮询等待缓存生成完成
           await invoke('enqueue_thumbnail', {
             sourcePath,
             fileHash,
@@ -224,15 +224,38 @@ export function useThumbnail(
             priority: opts.priority,
           });
 
-          // 等待一小段时间让队列处理
-          await new Promise(resolve => setTimeout(resolve, 50));
+          // 轮询等待缩略图生成完成（避免重复调用 generate_thumbnail 导致竞争）
+          const maxWaitMs = 10000; // 最长等待 10 秒
+          const pollIntervalMs = 100;
+          let waited = 0;
+          let cached: string | null = null;
 
-          // 检查缓存是否已生成
-          result = await invoke<ThumbnailResult>('generate_thumbnail', {
-            sourcePath,
-            fileHash,
-            size: opts.size,
-          });
+          while (waited < maxWaitMs) {
+            if (!mounted || shouldCancelRef.current) return;
+
+            // 检查缓存是否已生成
+            cached = await invoke<string | null>('get_thumbnail_cache_path', {
+              fileHash,
+              size: opts.size,
+            });
+
+            if (cached) {
+              break;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+            waited += pollIntervalMs;
+          }
+
+          // 超时后仍未生成，抛出错误让重试逻辑处理
+          if (!cached) {
+            throw new Error('Thumbnail generation timeout');
+          }
+
+          result = {
+            path: cached,
+            hitCache: true,
+          };
         } else {
           // 直接生成
           result = await invoke<ThumbnailResult>('generate_thumbnail', {
