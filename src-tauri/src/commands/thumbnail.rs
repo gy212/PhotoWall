@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use serde::Serialize;
 use tauri::State;
 
-use crate::services::{ThumbnailService, ThumbnailSize, ThumbnailTask};
-use crate::utils::error::CommandError;
+use crate::services::{ThumbnailSize, ThumbnailTask};
+use crate::utils::error::{AppError, CommandError};
 use crate::AppState;
 
 #[derive(Debug, Serialize)]
@@ -27,7 +27,7 @@ pub struct ThumbnailResponse {
 /// - size: small | medium | large（默认 medium）
 #[tauri::command]
 pub async fn generate_thumbnail(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     source_path: String,
     file_hash: String,
     size: Option<String>,
@@ -38,15 +38,21 @@ pub async fn generate_thumbnail(
         .and_then(ThumbnailSize::from_str)
         .unwrap_or(ThumbnailSize::Medium);
 
-    let cache_dir = ThumbnailService::default_cache_dir();
-    let service = ThumbnailService::new(cache_dir)
-        .map_err(|e| CommandError::from(e))?;
+    // 限制并发 + 将重活移出 async 线程，避免 UI 卡顿
+    let _permit = state
+        .thumbnail_limiter
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|_| CommandError::from(AppError::General("Thumbnail limiter closed".into())))?;
 
-    let path_buf = PathBuf::from(&source_path);
-
-    let result = service
-        .get_or_generate(&path_buf, &file_hash, size)
-        .map_err(|e| CommandError::from(e))?;
+    let service = state.thumbnail_service.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let path_buf = PathBuf::from(&source_path);
+        service.get_or_generate(&path_buf, &file_hash, size)
+    })
+    .await
+    .map_err(|e| CommandError::from(AppError::General(e.to_string())))??;
 
     Ok(ThumbnailResponse {
         path: result.path.to_string_lossy().to_string(),
@@ -125,7 +131,7 @@ pub async fn cancel_thumbnail(
 /// 检查缩略图缓存是否存在，存在则返回路径
 #[tauri::command]
 pub async fn get_thumbnail_cache_path(
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
     file_hash: String,
     size: Option<String>,
 ) -> Result<Option<String>, CommandError> {
@@ -134,12 +140,14 @@ pub async fn get_thumbnail_cache_path(
         .and_then(ThumbnailSize::from_str)
         .unwrap_or(ThumbnailSize::Medium);
 
-    let cache_dir = ThumbnailService::default_cache_dir();
-    let service = ThumbnailService::new(cache_dir)
-        .map_err(|e| CommandError::from(e))?;
-
+    let service = &state.thumbnail_service;
     if service.is_cached(&file_hash, size) {
-        Ok(Some(service.get_cache_path(&file_hash, size).to_string_lossy().to_string()))
+        Ok(Some(
+            service
+                .get_cache_path(&file_hash, size)
+                .to_string_lossy()
+                .to_string(),
+        ))
     } else {
         Ok(None)
     }
@@ -153,4 +161,20 @@ pub struct ThumbnailTaskInput {
     pub file_hash: String,
     pub size: Option<String>,
     pub priority: Option<i32>,
+}
+
+/// LibRaw 状态信息
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrawStatus {
+    /// LibRaw 是否可用
+    pub available: bool,
+}
+
+/// 获取 LibRaw 状态
+#[tauri::command]
+pub fn get_libraw_status() -> LibrawStatus {
+    LibrawStatus {
+        available: crate::services::libraw::is_available(),
+    }
 }

@@ -106,6 +106,17 @@ pub struct PhotoSortOptions {
     pub order: SortOrder,
 }
 
+/// 游标（用于高性能的无限滚动分页）
+///
+/// - `sort_value`: 当前排序字段的值（string/number/null）
+/// - `photo_id`: 作为稳定排序的 tie-breaker，避免排序值重复时漏/重数据
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoCursor {
+    pub sort_value: serde_json::Value,
+    pub photo_id: i64,
+}
+
 /// 搜索过滤器
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

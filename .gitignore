@@ -27,6 +27,12 @@ releases/
 src-tauri/target/
 src-tauri/gen/
 
+# LibRaw (binary, download separately)
+LibRaw-*/
+**/LibRaw-*/
+src-tauri/resources/libraw/*.dll
+src-tauri/resources/libraw/*.lib
+
 # C# Imaging project (optional component)
 src/PhotoWall.Imaging/
 
@@ -36,11 +42,13 @@ src/PhotoWall.Imaging/
 .qoder/
 .claude/
 .DS_Store
+LibRaw-0.21.4
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+*.sw
+
 
 # OS
 Thumbs.db
@@ -69,7 +77,7 @@ nul
 ui仿照/
 优化建议/
 
-# Internal development docs
-docs/
+# Internal development docs (keep libraw docs)
+# docs/
 
 # AI assistant configs (moved to docs/)
