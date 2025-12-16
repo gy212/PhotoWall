@@ -63,7 +63,7 @@ function TrashPage() {
   const [showEmptyDialog, setShowEmptyDialog] = useState(false);
 
   // 统计信息
-  const [stats, setStats] = useState<TrashStats | null>(null);
+  const [, setStats] = useState<TrashStats | null>(null);
 
   // 初始加载
   useEffect(() => {
@@ -327,15 +327,6 @@ function TrashPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [photos, selectAllPhotos, clearSelection]);
-
-  // 格式化文件大小
-  const formatSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
   // 空状态
   if (photos.length === 0 && !loading && !error) {

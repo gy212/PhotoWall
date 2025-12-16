@@ -21,12 +21,6 @@ interface TimelineViewProps {
   onLoadMore?: () => void;
 }
 
-interface DateGroup {
-  date: string; // YYYY-MM-DD
-  displayDate: string;
-  photos: Photo[];
-}
-
 const formatDate = (dateStr: string): string => {
   if (dateStr === 'unknown') return '未知日期';
 
@@ -67,17 +61,30 @@ const TimelineView = memo(function TimelineView({
 }: TimelineViewProps) {
   const virtuosoRef = useRef<any>(null);
   const location = useLocation();
+  const firstPhotoId = photos[0]?.photoId ?? null;
+  const prevFirstPhotoIdRef = useRef<number | null>(null);
+  const prevLocationKeyRef = useRef(location.key);
   const [expandedGroups, setExpandedGroups] = useState<Map<string, number>>(new Map());
 
   // Force a recompute when route/view changes so thumbnails load without manual scroll
   useEffect(() => {
+    const locationChanged = prevLocationKeyRef.current !== location.key;
+    const firstPhotoChanged = firstPhotoId !== null && prevFirstPhotoIdRef.current !== firstPhotoId;
+
+    prevLocationKeyRef.current = location.key;
+    prevFirstPhotoIdRef.current = firstPhotoId;
+
+    if (!locationChanged && !firstPhotoChanged) {
+      return;
+    }
+
     const rafId = requestAnimationFrame(() => {
       setTimeout(() => {
         virtuosoRef.current?.scrollTo?.({ top: 0 });
       }, 50);
     });
     return () => cancelAnimationFrame(rafId);
-  }, [photos.length, location.key]);
+  }, [firstPhotoId, location.key]);
 
   // Group photos by date
   const dateGroups = useMemo(() => {
@@ -169,6 +176,21 @@ const TimelineView = memo(function TimelineView({
     }
   }, [hasMore, loading, onLoadMore]);
 
+  const handleRangeChanged = useCallback(
+    (range: any) => {
+      if (!hasMore || loading || !onLoadMore || dateGroups.length === 0) {
+        return;
+      }
+
+      const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
+      const prefetchThreshold = 2;
+      if (endIndex >= dateGroups.length - prefetchThreshold) {
+        onLoadMore();
+      }
+    },
+    [dateGroups.length, hasMore, loading, onLoadMore]
+  );
+
   if (dateGroups.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -197,12 +219,13 @@ const TimelineView = memo(function TimelineView({
     <div className="h-full w-full">
       <Virtuoso
         ref={virtuosoRef}
-        key={`timeline-${location.key}-${photos.length}-${thumbnailSize}`}
+        key={`timeline-${location.key}-${thumbnailSize}`}
         totalCount={dateGroups.length}
         initialItemCount={Math.min(dateGroups.length, 10)}
         itemContent={renderDateGroup}
+        rangeChanged={handleRangeChanged}
         endReached={handleEndReached}
-        overscan={400}
+        overscan={1000}
         className="px-6"
         components={{
           Footer: () => (

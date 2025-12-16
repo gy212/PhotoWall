@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 // Mock Tauri API
-global.__TAURI_INTERNALS__ = {
+globalThis.__TAURI_INTERNALS__ = {
   convertFileSrc: (path: string) => `asset://${path}`,
 };
 

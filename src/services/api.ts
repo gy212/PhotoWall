@@ -15,6 +15,8 @@ import type {
   SearchFilters,
   PaginationParams,
   PaginatedResult,
+  PhotoCursor,
+  CursorPageResult,
   SortOptions,
   ImportOptions,
   IndexResult,
@@ -133,6 +135,25 @@ export async function searchPhotos(
 }
 
 /**
+ * 搜索照片（游标分页，用于无限滚动）
+ */
+export async function searchPhotosCursor(
+  filters: SearchFilters,
+  limit: number,
+  cursor: PhotoCursor | null,
+  sort: SortOptions,
+  includeTotal: boolean
+): Promise<CursorPageResult<Photo>> {
+  return invoke<CursorPageResult<Photo>>('search_photos_cursor', {
+    filters,
+    limit,
+    cursor,
+    sort,
+    includeTotal,
+  });
+}
+
+/**
  * 简单文本搜索
  */
 export async function searchPhotosSimple(
@@ -157,6 +178,23 @@ export async function getPhotos(
   sort: SortOptions
 ): Promise<PaginatedResult<Photo>> {
   return invoke<PaginatedResult<Photo>>('get_photos', { pagination, sort });
+}
+
+/**
+ * 获取照片列表（游标分页，用于无限滚动）
+ */
+export async function getPhotosCursor(
+  limit: number,
+  cursor: PhotoCursor | null,
+  sort: SortOptions,
+  includeTotal: boolean
+): Promise<CursorPageResult<Photo>> {
+  return invoke<CursorPageResult<Photo>>('get_photos_cursor', {
+    limit,
+    cursor,
+    sort,
+    includeTotal,
+  });
 }
 
 /**

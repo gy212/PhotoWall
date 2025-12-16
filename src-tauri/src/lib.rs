@@ -10,6 +10,8 @@ pub mod utils;
 
 use std::sync::Arc;
 
+use tokio::sync::Semaphore;
+
 use commands::{
     // greet
     greet,
@@ -17,7 +19,8 @@ use commands::{
     scan_directory, scan_directories, index_directory, index_directories, get_database_stats,
     refresh_photo_metadata,
     // search
-    search_photos, search_photos_simple, get_photo, get_photos, get_favorite_photos,
+    search_photos, search_photos_cursor, search_photos_simple, get_photo, get_photos,
+    get_photos_cursor, get_favorite_photos,
     get_photos_by_tag, get_photos_by_album, set_photo_rating, set_photo_favorite,
     set_photos_favorite, get_camera_models, get_lens_models, get_photo_stats,
     // trash
@@ -35,6 +38,7 @@ use commands::{
     reorder_album_photos, remove_photos_from_album,
     // thumbnails
     generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
+    get_libraw_status,
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
@@ -50,7 +54,9 @@ use db::Database;
 /// 应用程序状态
 pub struct AppState {
     pub db: Arc<Database>,
+    pub thumbnail_service: services::ThumbnailService,
     pub thumbnail_queue: Arc<services::ThumbnailQueue>,
+    pub thumbnail_limiter: Arc<Semaphore>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -76,12 +82,16 @@ pub fn run() {
     let thumbnail_cache_dir = services::ThumbnailService::default_cache_dir();
     let thumbnail_service = services::ThumbnailService::new(thumbnail_cache_dir)
         .expect("无法初始化缩略图服务");
-    let thumbnail_queue = services::ThumbnailQueue::new(thumbnail_service)
+    let thumbnail_queue = services::ThumbnailQueue::new(thumbnail_service.clone())
         .expect("无法初始化缩略图队列");
 
     let app_state = AppState {
         db: Arc::new(database),
+        thumbnail_service,
         thumbnail_queue: Arc::new(thumbnail_queue),
+        // 控制同时生成缩略图的数量，避免 CPU/IO 瞬时被打满导致 UI 卡顿
+        // 注：这主要保护前端直接调用 generate_thumbnail 的路径；队列有独立工作线程池
+        thumbnail_limiter: Arc::new(Semaphore::new(2)),
     };
 
     tracing::info!("数据库初始化完成");
@@ -104,9 +114,11 @@ pub fn run() {
             refresh_photo_metadata,
             // search
             search_photos,
+            search_photos_cursor,
             search_photos_simple,
             get_photo,
             get_photos,
+            get_photos_cursor,
             get_favorite_photos,
             get_photos_by_tag,
             get_photos_by_album,
@@ -162,6 +174,7 @@ pub fn run() {
             enqueue_thumbnails_batch,
             cancel_thumbnail,
             get_thumbnail_cache_path,
+            get_libraw_status,
             // file_ops
             import_photos,
             export_photos,

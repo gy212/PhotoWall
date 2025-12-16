@@ -56,6 +56,13 @@ pub struct ThumbnailSettings {
     pub auto_cleanup: bool,
     /// 清理阈值（当缓存超过此百分比时清理）
     pub cleanup_threshold: u8,
+    /// 是否启用 LibRaw 提取 RAW 预览（默认启用）
+    #[serde(default = "default_libraw_enabled")]
+    pub libraw_enabled: bool,
+}
+
+fn default_libraw_enabled() -> bool {
+    true
 }
 
 impl Default for ThumbnailSettings {
@@ -65,6 +72,7 @@ impl Default for ThumbnailSettings {
             quality: 85,
             auto_cleanup: true,
             cleanup_threshold: 90, // 90%
+            libraw_enabled: true,
         }
     }
 }

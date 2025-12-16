@@ -184,6 +184,25 @@ export interface PaginatedResult<T> {
 }
 
 /**
+ * 游标（用于无限滚动的高性能分页）
+ */
+export interface PhotoCursor {
+  /** 当前排序字段的值（string/number/null） */
+  sortValue: string | number | null;
+  /** 稳定排序 tie-breaker */
+  photoId: number;
+}
+
+/**
+ * 游标分页结果
+ */
+export interface CursorPageResult<T> {
+  items: T[];
+  /** 仅在首屏/需要时返回，用于展示总数 */
+  total?: number | null;
+}
+
+/**
  * 导入选项
  */
 export interface ImportOptions {

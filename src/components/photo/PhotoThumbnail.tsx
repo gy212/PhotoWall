@@ -60,11 +60,20 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   const [loaded, setLoaded] = useState(false);
   const [localError, setLocalError] = useState(false);
   const isTauriRuntime = useMemo(() => detectTauriRuntime(), []);
-  const targetThumbnailSize = useMemo(() => resolveThumbnailSize(size), [size]);
+  const targetThumbnailSize = useMemo(() => {
+    // 列表/网格页优先保证流畅性，避免触发后端更重的 large 路径
+    const resolved = resolveThumbnailSize(size);
+    return resolved === 'large' ? 'medium' : resolved;
+  }, [size]);
   const { thumbnailUrl, isLoading: thumbnailLoading, error: thumbnailError } = useThumbnail(
     photo.filePath,
     photo.fileHash,
-    { size: targetThumbnailSize, enabled: isTauriRuntime }
+    {
+      size: targetThumbnailSize,
+      enabled: isTauriRuntime,
+      // 滚动时防抖：快速划过的条目通常会在延迟内卸载，从而避免发起后端生成请求
+      loadDelay: 120,
+    }
   );
 
   const fallbackAssetUrl = useMemo(() => {

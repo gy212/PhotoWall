@@ -6,6 +6,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { MouseEvent } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { open } from '@tauri-apps/plugin-dialog';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
@@ -15,15 +16,15 @@ import ContextMenu from '@/components/common/ContextMenu';
 import type { ContextMenuItem } from '@/components/common/ContextMenu';
 import {
   indexDirectory,
-  getPhotos,
-  searchPhotos,
+  getPhotosCursor,
+  searchPhotosCursor,
   getDatabaseStats,
   softDeletePhotos,
   refreshPhotoMetadata,
   setPhotosFavorite,
   setPhotoFavorite,
 } from '@/services/api';
-import type { Photo, PaginatedResult, SearchFilters, IndexResult } from '@/types';
+import type { Photo, PhotoCursor, SearchFilters, IndexResult, SortField } from '@/types';
 import clsx from 'clsx';
 
 /** 每页加载数量 */
@@ -38,19 +39,12 @@ const detectTauriRuntime = () => {
 };
 
 function HomePage() {
-  const photos = usePhotoStore(state => state.photos);
-  const loading = usePhotoStore(state => state.loading);
-  const error = usePhotoStore(state => state.error);
   const sortOptions = usePhotoStore(state => state.sortOptions);
-  const thumbnailSize = usePhotoStore(state => state.thumbnailSize);
   const searchQuery = usePhotoStore(state => state.searchQuery);
   const viewMode = usePhotoStore(state => state.viewMode);
   const totalCount = usePhotoStore(state => state.totalCount);
-  const setPhotos = usePhotoStore(state => state.setPhotos);
-  const addPhotos = usePhotoStore(state => state.addPhotos);
-  const setLoading = usePhotoStore(state => state.setLoading);
-  const setError = usePhotoStore(state => state.setError);
   const setTotalCount = usePhotoStore(state => state.setTotalCount);
+  const setSearchQuery = usePhotoStore(state => state.setSearchQuery);
   const selectedIds = useSelectionStore(state => state.selectedIds);
   const lastSelectedId = useSelectionStore(state => state.lastSelectedId);
   const toggleSelection = useSelectionStore(state => state.toggle);
@@ -59,10 +53,27 @@ function HomePage() {
   const selectMultiple = useSelectionStore(state => state.selectMultiple);
   const selectAllPhotos = useSelectionStore(state => state.selectAll);
   const isTauriRuntime = detectTauriRuntime();
+  const queryClient = useQueryClient();
 
-  // 分页状态
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  // 搜索防抖：避免每次按键都触发查询
+  const debouncedLoadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+  useEffect(() => {
+    if (debouncedLoadRef.current) {
+      clearTimeout(debouncedLoadRef.current);
+    }
+
+    debouncedLoadRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      if (debouncedLoadRef.current) {
+        clearTimeout(debouncedLoadRef.current);
+        debouncedLoadRef.current = null;
+      }
+    };
+  }, [searchQuery]);
 
   // 查看器状态
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -93,32 +104,98 @@ function HomePage() {
   const hasRefreshedMetadata = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 防抖搜索 - 避免频繁按键时的过多请求
-  const debouncedLoadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // 初始加载和排序变化时立即加载
-  useEffect(() => {
-    loadPhotos(1, true);
-  }, [sortOptions]);
-
-  // 搜索关键词变化时使用防抖加载
-  useEffect(() => {
-    // 清除之前的防抖定时器
-    if (debouncedLoadRef.current) {
-      clearTimeout(debouncedLoadRef.current);
+  const getCursorForPhoto = useCallback((photo: Photo, field: SortField): PhotoCursor => {
+    let sortValue: string | number | null = null;
+    switch (field) {
+      case 'dateTaken':
+        sortValue = photo.dateTaken ?? null;
+        break;
+      case 'dateAdded':
+        sortValue = photo.dateAdded ?? null;
+        break;
+      case 'fileName':
+        sortValue = photo.fileName ?? null;
+        break;
+      case 'fileSize':
+        sortValue = photo.fileSize ?? null;
+        break;
+      case 'rating':
+        sortValue = photo.rating ?? null;
+        break;
+      default:
+        sortValue = photo.dateTaken ?? null;
+        break;
     }
-    
-    // 设置300ms防抖延迟
-    debouncedLoadRef.current = setTimeout(() => {
-      loadPhotos(1, true);
-    }, 300);
-    
-    return () => {
-      if (debouncedLoadRef.current) {
-        clearTimeout(debouncedLoadRef.current);
+
+    return { sortValue, photoId: photo.photoId };
+  }, []);
+
+  const photoFeedQueryKey = useMemo(
+    () => [
+      'photoFeed',
+      {
+        q: debouncedSearchQuery.trim(),
+        field: sortOptions.field,
+        order: sortOptions.order,
+      },
+    ] as const,
+    [debouncedSearchQuery, sortOptions.field, sortOptions.order]
+  );
+
+  const {
+    data,
+    status,
+    error: queryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: photoFeedQueryKey,
+    enabled: isTauriRuntime,
+    initialPageParam: null as PhotoCursor | null,
+    queryFn: async ({ pageParam }) => {
+      const cursor = pageParam ?? null;
+      const includeTotal = pageParam == null;
+      const q = debouncedSearchQuery.trim();
+
+      if (q) {
+        const filters: SearchFilters = { query: q };
+        return searchPhotosCursor(filters, PAGE_SIZE, cursor, sortOptions, includeTotal);
       }
-    };
-  }, [searchQuery]);
+
+      return getPhotosCursor(PAGE_SIZE, cursor, sortOptions, includeTotal);
+    },
+    getNextPageParam: (lastPage) => {
+      if (lastPage.items.length < PAGE_SIZE) {
+        return undefined;
+      }
+      const last = lastPage.items[lastPage.items.length - 1];
+      return last ? getCursorForPhoto(last, sortOptions.field) : undefined;
+    },
+  });
+
+  const photos = useMemo(() => data?.pages.flatMap(page => page.items) ?? [], [data]);
+  const loading = status === 'pending' || isFetchingNextPage;
+  const error = useMemo(() => {
+    if (!queryError) return null;
+    return queryError instanceof Error ? queryError.message : String(queryError);
+  }, [queryError]);
+  const hasMore = Boolean(hasNextPage);
+
+  // 仅在需要时更新总数（首屏返回 total；后续页为 null）
+  useEffect(() => {
+    const total = data?.pages?.[0]?.total;
+    if (typeof total === 'number') {
+      setTotalCount(total);
+    }
+  }, [data, setTotalCount]);
+
+  // 加载更多（由 PhotoGrid/TimelineView 在接近底部时触发）
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   // 检测是否需要刷新元数据（照片缺少 dateTaken）
   useEffect(() => {
@@ -138,9 +215,9 @@ function HomePage() {
           console.log(`[HomePage] 元数据刷新完成:`, result);
           setIndexProgress(`日期刷新完成：${result.updated} 张更新`);
           
-          // 重新加载照片列表
+          // 日期更新会影响排序，重置无限列表到首屏
           if (result.updated > 0) {
-            await loadPhotos(1, true);
+            queryClient.removeQueries({ queryKey: photoFeedQueryKey, exact: true });
           }
           
           setTimeout(() => setIndexProgress(''), 3000);
@@ -154,61 +231,7 @@ function HomePage() {
     };
     
     checkAndRefreshMetadata();
-  }, [photos.length]); // 只在照片数量变化时检查
-
-  // 加载照片
-  const loadPhotos = useCallback(
-    async (pageNum: number, reset: boolean = false) => {
-      if (loading) return;
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        let result: PaginatedResult<Photo>;
-
-        // 如果有搜索关键词，使用搜索API；否则使用普通列表API
-        if (searchQuery && searchQuery.trim()) {
-          const filters: SearchFilters = {
-            query: searchQuery.trim(),
-          };
-          const searchResult = await searchPhotos(
-            filters,
-            { page: pageNum, pageSize: PAGE_SIZE },
-            sortOptions
-          );
-          result = searchResult.photos;
-        } else {
-          result = await getPhotos(
-            { page: pageNum, pageSize: PAGE_SIZE },
-            sortOptions
-          );
-        }
-
-        if (reset) {
-          setPhotos(result.items);
-        } else {
-          addPhotos(result.items);
-        }
-
-        setPage(pageNum);
-        setTotalCount(result.total);
-        setHasMore(pageNum < result.totalPages);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '加载照片失败');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [loading, sortOptions, searchQuery, setPhotos, addPhotos, setLoading, setError, setTotalCount]
-  );
-
-  // 加载更多
-  const handleLoadMore = useCallback(() => {
-    if (!loading && hasMore) {
-      loadPhotos(page + 1, false);
-    }
-  }, [loading, hasMore, page, loadPhotos]);
+  }, [photos, photoFeedQueryKey, queryClient, refreshing]);
 
   // 选择文件夹并索引
   const handleAddFolder = useCallback(async () => {
@@ -241,8 +264,9 @@ function HomePage() {
         `索引完成：${result.indexed} 张照片已添加，${result.skipped} 张跳过，${result.failed} 个错误`
       );
 
-      // 重新加载照片列表
-      await loadPhotos(1, true);
+      // 新增数据会改变列表，重置无限列表到首屏
+      hasRefreshedMetadata.current = false;
+      queryClient.removeQueries({ queryKey: photoFeedQueryKey, exact: true });
 
       // 更新数据库统计
       await getDatabaseStats();
@@ -264,7 +288,7 @@ function HomePage() {
         setIndexingError(false);
       }, 3000);
     }
-  }, [isTauriRuntime, loadPhotos]);
+  }, [isTauriRuntime, photoFeedQueryKey, queryClient]);
 
   const selectRange = useCallback(
     (targetId: number, additive: boolean) => {
@@ -406,25 +430,34 @@ function HomePage() {
     try {
       await setPhotoFavorite(photo.photoId, !photo.isFavorite);
       // 更新照片列表中的收藏状态
-      setPhotos(photos.map((p: Photo) => 
-        p.photoId === photo.photoId ? { ...p, isFavorite: !photo.isFavorite } : p
-      ));
+      queryClient.setQueryData(photoFeedQueryKey, (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: page.items.map((p: Photo) =>
+              p.photoId === photo.photoId ? { ...p, isFavorite: !photo.isFavorite } : p
+            ),
+          })),
+        };
+      });
     } catch (err) {
       console.error('设置收藏失败:', err);
     }
-  }, [photos, setPhotos]);
+  }, [photoFeedQueryKey, queryClient]);
 
   // 单张照片删除
   const handleSingleDelete = useCallback(async (photo: Photo) => {
     try {
       await softDeletePhotos([photo.photoId]);
       // 从照片列表中移除
-      setPhotos(photos.filter((p: Photo) => p.photoId !== photo.photoId));
+      queryClient.removeQueries({ queryKey: photoFeedQueryKey, exact: true });
       setTotalCount(Math.max(0, totalCount - 1));
     } catch (err) {
       console.error('删除照片失败:', err);
     }
-  }, [photos, setPhotos, setTotalCount, totalCount]);
+  }, [photoFeedQueryKey, queryClient, setTotalCount, totalCount]);
 
   // 右键菜单项
   const contextMenuItems = useMemo((): ContextMenuItem[] => {
@@ -489,9 +522,20 @@ function HomePage() {
   const handlePhotoUpdate = useCallback(
     (updatedPhoto: Photo) => {
       // 更新照片列表中的照片
-      setPhotos(photos.map((p: Photo) => (p.photoId === updatedPhoto.photoId ? updatedPhoto : p)));
+      queryClient.setQueryData(photoFeedQueryKey, (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: page.items.map((p: Photo) =>
+              p.photoId === updatedPhoto.photoId ? updatedPhoto : p
+            ),
+          })),
+        };
+      });
     },
-    [photos, setPhotos]
+    [photoFeedQueryKey, queryClient]
   );
 
   // 删除照片
@@ -507,7 +551,6 @@ function HomePage() {
       const deletedCount = await softDeletePhotos(photoIds); // 软删除，移入回收站
 
       // 从照片列表中移除已删除的照片
-      setPhotos(photos.filter((p: Photo) => !selectedIds.has(p.photoId)));
 
       // 清除选择
       clearSelection();
@@ -520,15 +563,13 @@ function HomePage() {
       setShowDeleteDialog(false);
 
       // 如果删除后当前页没有照片了，重新加载
-      if (photos.length - deletedCount === 0 && page > 1) {
-        loadPhotos(page - 1, true);
-      }
+      queryClient.removeQueries({ queryKey: photoFeedQueryKey, exact: true });
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : '删除失败');
     } finally {
       setDeleting(false);
     }
-  }, [selectedIds, photos, setPhotos, clearSelection, setTotalCount, page, loadPhotos]);
+  }, [clearSelection, photoFeedQueryKey, queryClient, selectedIds, setTotalCount, totalCount]);
 
   // 批量收藏/取消收藏
   const handleToggleFavorite = useCallback(async (shouldFavorite: boolean) => {
@@ -544,9 +585,19 @@ function HomePage() {
       await setPhotosFavorite(photoIds, shouldFavorite);
 
       // 更新照片列表中的收藏状态
-      setPhotos(photos.map((p: Photo) => 
-        selectedIds.has(p.photoId) ? { ...p, isFavorite: shouldFavorite } : p
-      ));
+      const selected = new Set(selectedIds);
+      queryClient.setQueryData(photoFeedQueryKey, (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            items: page.items.map((p: Photo) =>
+              selected.has(p.photoId) ? { ...p, isFavorite: shouldFavorite } : p
+            ),
+          })),
+        };
+      });
 
       // 清除选择
       clearSelection();
@@ -555,12 +606,10 @@ function HomePage() {
     } finally {
       setFavoriting(false);
     }
-  }, [selectedIds, photos, setPhotos, clearSelection]);
+  }, [clearSelection, photoFeedQueryKey, queryClient, selectedIds]);
 
   // 视图模式
-  const setViewMode = usePhotoStore(state => state.setViewMode);
-  const setSearchQuery = usePhotoStore(state => state.setSearchQuery);
-  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
 
   // 视图切换选项
   type ViewStyle = 'compact' | 'spaced' | 'aspect';

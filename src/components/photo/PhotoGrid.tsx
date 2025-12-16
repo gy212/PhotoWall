@@ -50,16 +50,29 @@ const PhotoGrid = memo(function PhotoGrid({
 }: PhotoGridProps) {
   const virtuosoRef = useRef<VirtuosoGridHandle>(null);
   const location = useLocation();
+  const firstPhotoId = photos[0]?.photoId ?? null;
+  const prevFirstPhotoIdRef = useRef<number | null>(null);
+  const prevLocationKeyRef = useRef(location.key);
 
   // Force recalculation after mount/route change so thumbnails render without manual scroll
   useEffect(() => {
+    const locationChanged = prevLocationKeyRef.current !== location.key;
+    const firstPhotoChanged = firstPhotoId !== null && prevFirstPhotoIdRef.current !== firstPhotoId;
+
+    prevLocationKeyRef.current = location.key;
+    prevFirstPhotoIdRef.current = firstPhotoId;
+
+    if (!locationChanged && !firstPhotoChanged) {
+      return;
+    }
+
     const rafId = requestAnimationFrame(() => {
       setTimeout(() => {
         virtuosoRef.current?.scrollTo({ top: 0 });
       }, 50);
     });
     return () => cancelAnimationFrame(rafId);
-  }, [photos.length, location.key]);
+  }, [firstPhotoId, location.key]);
 
   // Custom list container style
   const listStyle = useMemo(
@@ -109,6 +122,21 @@ const PhotoGrid = memo(function PhotoGrid({
     }
   }, [loading, hasMore, onLoadMore]);
 
+  const handleRangeChanged = useCallback(
+    (range: any) => {
+      if (!hasMore || loading || !onLoadMore || photos.length === 0) {
+        return;
+      }
+
+      const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
+      const prefetchThreshold = 40;
+      if (endIndex >= photos.length - prefetchThreshold) {
+        onLoadMore();
+      }
+    },
+    [hasMore, loading, onLoadMore, photos.length]
+  );
+
   // 空状态
   if (photos.length === 0 && !loading) {
     return (
@@ -142,13 +170,14 @@ const PhotoGrid = memo(function PhotoGrid({
     <div className="h-full w-full">
       <VirtuosoGrid
         ref={virtuosoRef}
-        key={`grid-${location.key}-${photos.length}-${thumbnailSize}`}
+        key={`grid-${location.key}-${thumbnailSize}`}
         totalCount={photos.length}
         initialItemCount={Math.min(photos.length, 50)}
-        overscan={400}
+        overscan={1000}
         listClassName="photo-grid-list"
         itemClassName="photo-grid-item"
         itemContent={itemContent}
+        rangeChanged={handleRangeChanged}
         endReached={handleEndReached}
         scrollerRef={(ref) => {
           // 优化滚动性能

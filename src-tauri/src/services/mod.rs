@@ -10,6 +10,7 @@ pub mod thumbnail;
 pub mod thumbnail_queue;
 pub mod watcher;
 pub mod settings;
+pub mod libraw;
 
 // 重新导出常用类型
 pub use scanner::{Scanner, ScanOptions, ScanResult, ScanProgress, is_image_file, SUPPORTED_FORMATS};

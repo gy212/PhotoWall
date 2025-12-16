@@ -6,9 +6,17 @@ use tauri::State;
 
 use crate::db::photo_dao::{PhotoStats, TrashStats};
 use crate::models::{
-    PaginatedResult, PaginationParams, Photo, PhotoSortOptions, SearchFilters, SearchResult,
+    PaginatedResult, PaginationParams, Photo, PhotoCursor, PhotoSortOptions, SearchFilters,
+    SearchResult,
 };
 use crate::AppState;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorPageResult<T> {
+    pub items: Vec<T>,
+    pub total: Option<i64>,
+}
 
 /// 搜索照片
 #[tauri::command]
@@ -66,6 +74,51 @@ pub async fn get_photos(
         .db
         .get_photos(&pagination, &sort)
         .map_err(|e| e.to_string())
+}
+
+/// 获取照片列表（游标分页，用于无限滚动）
+#[tauri::command]
+pub async fn get_photos_cursor(
+    state: State<'_, AppState>,
+    limit: u32,
+    cursor: Option<PhotoCursor>,
+    sort: PhotoSortOptions,
+    include_total: Option<bool>,
+) -> Result<CursorPageResult<Photo>, String> {
+    let include_total = include_total.unwrap_or(false);
+
+    let total = if include_total {
+        Some(state.db.count_photos().map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+
+    let items = state
+        .db
+        .get_photos_cursor(limit, cursor.as_ref(), &sort)
+        .map_err(|e| e.to_string())?;
+
+    Ok(CursorPageResult { items, total })
+}
+
+/// 搜索照片（游标分页，用于无限滚动）
+#[tauri::command]
+pub async fn search_photos_cursor(
+    state: State<'_, AppState>,
+    filters: SearchFilters,
+    limit: u32,
+    cursor: Option<PhotoCursor>,
+    sort: PhotoSortOptions,
+    include_total: Option<bool>,
+) -> Result<CursorPageResult<Photo>, String> {
+    let include_total = include_total.unwrap_or(false);
+
+    let (items, total) = state
+        .db
+        .search_photos_cursor(&filters, limit, cursor.as_ref(), &sort, include_total)
+        .map_err(|e| e.to_string())?;
+
+    Ok(CursorPageResult { items, total })
 }
 
 /// 获取收藏的照片

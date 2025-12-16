@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Condvar};
-use image::{DynamicImage, ImageFormat, imageops::FilterType, RgbImage};
+use image::{DynamicImage, ImageFormat, imageops::FilterType, Rgb, RgbImage};
 use crate::utils::error::{AppError, AppResult};
 
 /// 缩略图尺寸
@@ -242,12 +242,14 @@ impl ThumbnailService {
                 image::open(source_path)?
             }
         } else if self.is_raw(source_path) {
-            // RAW 格式: 提取嵌入的预览图或解码
-            self.extract_raw_preview(source_path)
-                .ok_or_else(|| AppError::UnsupportedFormat(format!(
-                    "无法解码 RAW 文件: {}",
-                    source_path.display()
-                )))?
+            // RAW 格式:
+            // - 列表/网格页（Small/Medium）严格禁止 RAW 硬解码（去马赛克），避免滚动卡顿
+            // - 优先提取嵌入预览图；失败则生成占位缩略图，保证 UI 稳定
+            self.extract_raw_preview(source_path, size)
+                .unwrap_or_else(|| {
+                    tracing::debug!("RAW 预览提取失败，使用占位缩略图");
+                    self.generate_raw_placeholder(size)
+                })
         } else {
             // 其他格式: 正常加载
             image::open(source_path)?
@@ -259,7 +261,11 @@ impl ThumbnailService {
         // 生成缩略图（保持宽高比）
         // 使用 Triangle 滤波器替代 Lanczos3，性能更好且网格缩略图观感差异很小
         let dim = size.dimensions();
-        let thumbnail = img.resize(dim, dim, FilterType::Triangle);
+        let thumbnail = if img.width() == dim && img.height() == dim {
+            img
+        } else {
+            img.resize(dim, dim, FilterType::Triangle)
+        };
 
         // 保存为 WebP 格式（原子写入：先写 .tmp 再 rename，避免并发/中断导致坏缓存）
         let cache_path = self.get_cache_path(file_hash, size);
@@ -304,22 +310,43 @@ impl ThumbnailService {
     }
 
     /// 从 RAW 文件中提取嵌入的预览图
-    /// 
-    /// 大多数 RAW 文件内嵌了一个 JPEG 预览图，我们优先使用它
-    fn extract_raw_preview(&self, path: &Path) -> Option<DynamicImage> {
-        // 方法1: 扫描文件查找嵌入的 JPEG 预览图（最可靠）
-        if let Some(img) = self.scan_embedded_jpeg(path) {
-            tracing::debug!("从 RAW 文件中扫描到嵌入的 JPEG 预览");
-            return Some(img);
+    ///
+    /// 优先级链路：LibRaw -> EXIF -> (仅 Large) 受限扫描 -> (仅 Large) RAW 硬解码
+    ///
+    /// Phase 3 优化：
+    /// - LibRaw 已内置"选最大预览"策略
+    /// - Small/Medium 不再使用扫描兜底，避免 IO 开销
+    /// - 扫描和硬解码仅在 Large 尺寸时作为最后手段
+    fn extract_raw_preview(&self, path: &Path, size: ThumbnailSize) -> Option<DynamicImage> {
+        // 方法1: LibRaw 提取 embedded preview（首选，行业级实现，自动选最大预览）
+        if super::libraw::is_available() {
+            if let Some(img) = super::libraw::extract_preview_image(path) {
+                tracing::debug!("LibRaw 提取到嵌入预览: {:?}", path);
+                return Some(img);
+            }
         }
 
-        // 方法2: 尝试从 EXIF 中提取嵌入的 JPEG 缩略图
+        // 方法2: 尝试从 EXIF 中提取嵌入的 JPEG 缩略图（非常快，但通常较小）
         if let Some(img) = self.extract_raw_embedded_jpeg(path) {
             tracing::debug!("从 RAW EXIF 中提取到嵌入的 JPEG 预览");
             return Some(img);
         }
 
-        // 方法3: 使用 rawloader 解码 RAW 数据（带 Bayer 去马赛克）
+        // 方法3 & 4: 仅在 Large 尺寸时使用更重的兜底方法
+        // Small/Medium 直接返回 None，由调用方生成占位图
+        if size != ThumbnailSize::Large {
+            tracing::debug!("Small/Medium RAW 预览提取失败，跳过扫描兜底: {:?}", path);
+            return None;
+        }
+
+        // 方法3: 扫描文件查找嵌入的 JPEG 预览图（仅 Large）
+        // 扫描范围收缩到 32MB，减少 IO 开销
+        if let Some(img) = self.scan_embedded_jpeg_limited(path, 32 * 1024 * 1024, 50 * 1024) {
+            tracing::debug!("从 RAW 文件中扫描到嵌入的 JPEG 预览");
+            return Some(img);
+        }
+
+        // 方法4: RAW 硬解码兜底（仅 Large）
         if let Some(img) = self.decode_raw_image(path) {
             tracing::debug!("使用 rawloader 解码 RAW 图像");
             return Some(img);
@@ -356,54 +383,186 @@ impl ThumbnailService {
         image::load_from_memory(&thumb_data).ok()
     }
 
-    /// 扫描 RAW 文件中嵌入的 JPEG 预览图
-    /// 
+    /// 扫描 RAW 文件中嵌入的 JPEG 预览图（按字节数限制）
+    ///
     /// 大多数相机 RAW 文件（NEF、CR2、DNG 等）都会嵌入一个或多个 JPEG 预览图。
-    /// 此方法扫描文件寻找最大的 JPEG 图像。
-    fn scan_embedded_jpeg(&self, path: &Path) -> Option<DynamicImage> {
+    /// 这里采用流式扫描，避免一次性读入整个文件导致内存和 IO 峰值过高。
+    fn scan_embedded_jpeg_limited(
+        &self,
+        path: &Path,
+        max_scan_bytes: u64,
+        min_jpeg_bytes: usize,
+    ) -> Option<DynamicImage> {
         use std::io::Read;
-        
-        let mut file = std::fs::File::open(path).ok()?;
-        let mut data = Vec::new();
-        file.read_to_end(&mut data).ok()?;
-        
-        // 查找所有 JPEG 数据块 (FFD8 开头, FFD9 结尾)
-        let mut jpegs: Vec<&[u8]> = Vec::new();
-        let mut i = 0;
-        
-        while i < data.len().saturating_sub(2) {
-            // 查找 JPEG 开始标记 (SOI: FF D8)
-            if data[i] == 0xFF && data[i + 1] == 0xD8 {
-                let start = i;
-                // 查找 JPEG 结束标记 (EOI: FF D9)
-                let mut j = i + 2;
-                while j < data.len().saturating_sub(1) {
-                    if data[j] == 0xFF && data[j + 1] == 0xD9 {
-                        let end = j + 2;
-                        let jpeg_data = &data[start..end];
-                        // 只保留较大的 JPEG（至少 10KB，排除小缩略图）
-                        if jpeg_data.len() > 10 * 1024 {
-                            jpegs.push(jpeg_data);
-                        }
-                        i = end;
-                        break;
+
+        let file = std::fs::File::open(path).ok()?;
+        let mut reader = std::io::BufReader::new(file);
+
+        let mut buf = vec![0u8; 256 * 1024];
+        let mut scanned: u64 = 0;
+
+        let mut best: Vec<u8> = Vec::new();
+        let mut current: Vec<u8> = Vec::new();
+        let mut in_jpeg = false;
+        let mut prev: Option<u8> = None;
+
+        let max_jpeg_bytes = (max_scan_bytes.min(64 * 1024 * 1024)) as usize; // 防止异常文件导致超大内存占用
+
+        loop {
+            if scanned >= max_scan_bytes {
+                break;
+            }
+            let to_read = (max_scan_bytes - scanned).min(buf.len() as u64) as usize;
+            let n = reader.read(&mut buf[..to_read]).ok()?;
+            if n == 0 {
+                break;
+            }
+
+            for &b in &buf[..n] {
+                scanned += 1;
+
+                if !in_jpeg {
+                    if prev == Some(0xFF) && b == 0xD8 {
+                        in_jpeg = true;
+                        current.clear();
+                        current.reserve(256 * 1024);
+                        current.push(0xFF);
+                        current.push(0xD8);
+                        prev = None;
+                        continue;
                     }
-                    j += 1;
+                } else {
+                    current.push(b);
+                    if current.len() > max_jpeg_bytes {
+                        // 超出限制，放弃本段，避免内存爆炸
+                        in_jpeg = false;
+                        current.clear();
+                        prev = None;
+                        continue;
+                    }
+                    if prev == Some(0xFF) && b == 0xD9 {
+                        if current.len() >= min_jpeg_bytes && current.len() > best.len() {
+                            best = current.clone();
+                        }
+                        in_jpeg = false;
+                        current.clear();
+                        prev = None;
+                        continue;
+                    }
                 }
-                if j >= data.len().saturating_sub(1) {
-                    break;
-                }
-            } else {
-                i += 1;
+
+                prev = Some(b);
             }
         }
-        
-        // 选择最大的 JPEG （通常是全尺寸预览）
-        let largest_jpeg = jpegs.iter().max_by_key(|j| j.len())?;
-        
-        tracing::debug!("找到 {} 个嵌入 JPEG，使用最大的 ({} KB)", jpegs.len(), largest_jpeg.len() / 1024);
-        
-        image::load_from_memory(largest_jpeg).ok()
+
+        if best.is_empty() {
+            return None;
+        }
+
+        image::load_from_memory(&best).ok()
+    }
+
+    /// 生成 RAW 占位缩略图（避免在列表页因解码失败出现大量错误卡片）
+    fn generate_raw_placeholder(&self, size: ThumbnailSize) -> DynamicImage {
+        let dim = size.dimensions();
+        let mut img = RgbImage::new(dim, dim);
+
+        let bg = Rgb([236, 240, 243]);
+        let border = Rgb([203, 213, 225]);
+        let fg = Rgb([100, 116, 139]);
+
+        for pixel in img.pixels_mut() {
+            *pixel = bg;
+        }
+
+        // 边框
+        let border_w = (dim / 96).clamp(2, 10);
+        for y in 0..dim {
+            for x in 0..dim {
+                let is_border = x < border_w || y < border_w || x >= dim - border_w || y >= dim - border_w;
+                if is_border {
+                    img.put_pixel(x, y, border);
+                }
+            }
+        }
+
+        // 简单 5x7 位图字体绘制 "RAW"
+        const GLYPH_W: u32 = 5;
+        const GLYPH_H: u32 = 7;
+        const SPACING_COLS: u32 = 1;
+        const TOTAL_COLS: u32 = GLYPH_W * 3 + SPACING_COLS * 2;
+
+        let scale = (dim / 24).max(6);
+        let text_w = TOTAL_COLS * scale;
+        let text_h = GLYPH_H * scale;
+        let start_x = (dim.saturating_sub(text_w)) / 2;
+        let start_y = (dim.saturating_sub(text_h)) / 2;
+
+        let r: [u8; 7] = [
+            0b11110,
+            0b10001,
+            0b10001,
+            0b11110,
+            0b10100,
+            0b10010,
+            0b10001,
+        ];
+        let a: [u8; 7] = [
+            0b01110,
+            0b10001,
+            0b10001,
+            0b11111,
+            0b10001,
+            0b10001,
+            0b10001,
+        ];
+        let w: [u8; 7] = [
+            0b10001,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b10101,
+            0b10101,
+            0b01010,
+        ];
+
+        fn draw_glyph(
+            img: &mut RgbImage,
+            glyph: &[u8; 7],
+            x0: u32,
+            y0: u32,
+            scale: u32,
+            color: Rgb<u8>,
+        ) {
+            for (row, mask) in glyph.iter().enumerate() {
+                for col in 0..GLYPH_W {
+                    let bit = (mask >> (GLYPH_W - 1 - col)) & 1;
+                    if bit == 0 {
+                        continue;
+                    }
+                    let px = x0 + col * scale;
+                    let py = y0 + row as u32 * scale;
+                    for dy in 0..scale {
+                        for dx in 0..scale {
+                            let x = px + dx;
+                            let y = py + dy;
+                            if x < img.width() && y < img.height() {
+                                img.put_pixel(x, y, color);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut x = start_x;
+        draw_glyph(&mut img, &r, x, start_y, scale, fg);
+        x += (GLYPH_W + SPACING_COLS) * scale;
+        draw_glyph(&mut img, &a, x, start_y, scale, fg);
+        x += (GLYPH_W + SPACING_COLS) * scale;
+        draw_glyph(&mut img, &w, x, start_y, scale, fg);
+
+        DynamicImage::ImageRgb8(img)
     }
 
     /// 使用 rawloader 解码 RAW 图像（带 Bayer 去马赛克处理）
