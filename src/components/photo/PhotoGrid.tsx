@@ -1,7 +1,8 @@
-import { memo, useMemo, useCallback, useRef, useEffect } from 'react';
+import { memo, useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { MouseEvent } from 'react';
 import { VirtuosoGrid, VirtuosoGridHandle } from 'react-virtuoso';
+import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
 import type { Photo } from '@/types';
 
@@ -53,6 +54,7 @@ const PhotoGrid = memo(function PhotoGrid({
   const firstPhotoId = photos[0]?.photoId ?? null;
   const prevFirstPhotoIdRef = useRef<number | null>(null);
   const prevLocationKeyRef = useRef(location.key);
+  const [isScrolling, setIsScrolling] = useState(false);
 
   // Force recalculation after mount/route change so thumbnails render without manual scroll
   useEffect(() => {
@@ -173,8 +175,9 @@ const PhotoGrid = memo(function PhotoGrid({
         key={`grid-${location.key}-${thumbnailSize}`}
         totalCount={photos.length}
         initialItemCount={Math.min(photos.length, 50)}
-        overscan={1000}
-        listClassName="photo-grid-list"
+        overscan={600}
+        isScrolling={setIsScrolling}
+        listClassName={clsx('photo-grid-list', isScrolling && 'pointer-events-none')}
         itemClassName="photo-grid-item"
         itemContent={itemContent}
         rangeChanged={handleRangeChanged}

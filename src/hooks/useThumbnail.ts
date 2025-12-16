@@ -322,13 +322,16 @@ export function useThumbnail(
     thumbnailEnabled,
   ]);
 
-  return {
-    thumbnailUrl,
-    isLoading,
-    error,
-    reload,
-    cancel,
-  };
+  return useMemo(
+    () => ({
+      thumbnailUrl,
+      isLoading,
+      error,
+      reload,
+      cancel,
+    }),
+    [thumbnailUrl, isLoading, error, reload, cancel]
+  );
 }
 
 /**

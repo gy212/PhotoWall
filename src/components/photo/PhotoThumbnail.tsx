@@ -138,10 +138,10 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     <div
       className={clsx(
         'group relative cursor-pointer overflow-hidden rounded-2xl bg-[#ecf0f3]',
-        'transition-all duration-300 ease-in-out',
+        'transition-transform duration-200 ease-out will-change-transform',
         selected
-          ? 'ring-[6px] ring-[#3b82f6] ring-offset-2 ring-offset-white scale-[1.03] shadow-2xl shadow-blue-500/30'
-          : 'hover:scale-[1.02] hover:shadow-xl'
+          ? 'ring-[4px] ring-[#3b82f6] scale-[0.96]'
+          : 'hover:scale-[1.02]'
       )}
       style={{ width: size, height: size }}
       onClick={handleClick}
@@ -157,7 +157,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={imageUrl}
           alt={photo.fileName}
           className={clsx(
-            'h-full w-full object-cover transition-transform duration-500 will-change-transform rounded-2xl',
+            'h-full w-full object-cover rounded-2xl will-change-transform transition-[transform,opacity] duration-300 ease-out',
             loaded ? 'opacity-100' : 'opacity-0',
             'group-hover:scale-110'
           )}
@@ -181,7 +181,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
 
       <div
         className={clsx(
-          'absolute top-3 left-3 z-10 transition-all duration-200',
+          'absolute top-3 left-3 z-10 transition-[transform,opacity] duration-200',
           selected ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'
         )}
         onClick={handleSelectToggle}
