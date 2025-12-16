@@ -81,3 +81,5 @@ ui仿照/
 # docs/
 
 # AI assistant configs (moved to docs/)
+AGENTS.md
+CLAUDE.md
