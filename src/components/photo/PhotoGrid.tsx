@@ -1,10 +1,26 @@
-import { memo, useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { memo, useMemo, useCallback, useRef, useEffect, useState, forwardRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { MouseEvent } from 'react';
-import { VirtuosoGrid, VirtuosoGridHandle } from 'react-virtuoso';
+import type { MouseEvent, HTMLAttributes, CSSProperties } from 'react';
+import { VirtuosoGrid, VirtuosoGridHandle, GridComponents } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
 import type { Photo } from '@/types';
+
+// 自定义 Scroller：强制滚动条始终占位，避免宽度变化导致的抖动
+const GridScroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ style, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={{
+        ...style,
+        overflowY: 'scroll',           // 强制滚动条始终占位
+        scrollbarGutter: 'stable',     // 现代 Chromium 支持，进一步稳定宽度
+        overflowAnchor: 'none',        // 关掉滚动锚定
+      } as CSSProperties}
+    />
+  )
+);
 
 interface PhotoGridProps {
   /** 照片列表 */
@@ -76,30 +92,53 @@ const PhotoGrid = memo(function PhotoGrid({
     return () => cancelAnimationFrame(rafId);
   }, [firstPhotoId, location.key]);
 
-  // Custom list container style
-  const listStyle = useMemo(
+  // 使用 useMemo 创建 gridComponents，避免每次渲染都创建新实例导致 remount
+  const gridComponents = useMemo<GridComponents<Photo>>(
     () => ({
-      display: 'flex',
-      flexWrap: 'wrap' as const,
-      gap: `${gap}px`,
-      padding: `${gap}px`,
+      Scroller: GridScroller,
+      List: forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { style?: CSSProperties }>(
+        ({ style, children, ...props }, ref) => (
+          <div
+            ref={ref}
+            {...props}
+            style={{
+              ...style,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: `${gap}px`,
+              padding: `${gap}px`,
+            }}
+          >
+            {children}
+          </div>
+        )
+      ),
+      Item: ({ children, ...props }) => (
+        <div
+          {...props}
+          style={{
+            width: `${thumbnailSize}px`,
+            height: `${thumbnailSize}px`,
+            boxSizing: 'border-box',
+          }}
+        >
+          {children}
+        </div>
+      ),
+      Footer: () =>
+        loading ? (
+          <div className="flex w-full items-center justify-center py-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+            <span className="ml-2 text-sm text-gray-500">加载中...</span>
+          </div>
+        ) : null,
     }),
-    [gap]
+    [gap, thumbnailSize, loading]
   );
 
-  // 自定义项目容器样式
-  const itemStyle = useMemo(
-    () => ({
-      width: `${thumbnailSize}px`,
-      height: `${thumbnailSize}px`,
-    }),
-    [thumbnailSize]
-  );
-
-  // 渲染单个照片
+  // 渲染单个照片 - 使用 data 模式，直接接收 photo 对象
   const itemContent = useCallback(
-    (index: number) => {
-      const photo = photos[index];
+    (_index: number, photo: Photo) => {
       if (!photo) return null;
 
       return (
@@ -115,7 +154,13 @@ const PhotoGrid = memo(function PhotoGrid({
         />
       );
     },
-    [photos, thumbnailSize, selectedIds, isScrolling, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
+    [thumbnailSize, selectedIds, isScrolling, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
+  );
+
+  // 稳定的 key 计算函数，避免用 index
+  const computeItemKey = useCallback(
+    (_index: number, photo: Photo) => photo.photoId,
+    []
   );
 
   // 加载更多
@@ -174,9 +219,11 @@ const PhotoGrid = memo(function PhotoGrid({
       <VirtuosoGrid
         ref={virtuosoRef}
         key={`grid-${location.key}-${thumbnailSize}`}
-        totalCount={photos.length}
+        data={photos}
+        computeItemKey={computeItemKey}
         initialItemCount={Math.min(photos.length, 50)}
-        overscan={600}
+        overscan={800}
+        increaseViewportBy={{ top: 400, bottom: 800 }}
         isScrolling={setIsScrolling}
         listClassName={clsx('photo-grid-list', isScrolling && 'pointer-events-none')}
         itemClassName="photo-grid-item"
@@ -184,30 +231,11 @@ const PhotoGrid = memo(function PhotoGrid({
         rangeChanged={handleRangeChanged}
         endReached={handleEndReached}
         scrollerRef={(ref) => {
-          // 优化滚动性能
           if (ref) {
             (ref as HTMLElement).style.willChange = 'scroll-position';
           }
         }}
-        components={{
-          List: ({ style, children, ...props }) => (
-            <div {...props} style={{ ...style, ...listStyle }}>
-              {children}
-            </div>
-          ),
-          Item: ({ style, children, ...props }) => (
-            <div {...props} style={{ ...style, ...itemStyle }}>
-              {children}
-            </div>
-          ),
-          Footer: () =>
-            loading ? (
-              <div className="flex w-full items-center justify-center py-4">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-                <span className="ml-2 text-sm text-gray-500">加载中...</span>
-              </div>
-            ) : null,
-        }}
+        components={gridComponents}
       />
     </div>
   );
