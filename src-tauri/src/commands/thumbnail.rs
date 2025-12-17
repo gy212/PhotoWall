@@ -199,3 +199,17 @@ pub fn get_libraw_status() -> LibrawStatus {
         available: crate::services::libraw::is_available(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_raw_file() {
+        assert!(is_raw_file("C:\\a\\b.CR2"));
+        assert!(is_raw_file("d:/a/b.nef"));
+        assert!(!is_raw_file("C:\\a\\b.jpg"));
+        assert!(!is_raw_file("C:\\a\\b.jpeg"));
+        assert!(!is_raw_file("C:\\a\\b.png"));
+    }
+}

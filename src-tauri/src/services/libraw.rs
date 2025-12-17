@@ -4,7 +4,7 @@
 //! 采用动态链接方式，运行时加载 libraw.dll。
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use image::{DynamicImage, RgbImage};
@@ -52,6 +52,67 @@ struct LibrawLib {
 
 // 全局 LibRaw 库实例（懒加载）
 static LIBRAW: OnceLock<Option<LibrawLib>> = OnceLock::new();
+
+enum RawPreviewJob {
+    Decode {
+        path: PathBuf,
+        result_tx: std::sync::mpsc::Sender<Option<DynamicImage>>,
+    },
+    #[cfg(test)]
+    TestBlock {
+        started_tx: std::sync::mpsc::Sender<()>,
+        release_rx: std::sync::mpsc::Receiver<()>,
+        done_tx: std::sync::mpsc::Sender<()>,
+    },
+}
+
+struct RawPreviewWorker {
+    tx: std::sync::mpsc::SyncSender<RawPreviewJob>,
+}
+
+impl RawPreviewWorker {
+    fn global() -> &'static Self {
+        static RAW_PREVIEW_WORKER: OnceLock<RawPreviewWorker> = OnceLock::new();
+        RAW_PREVIEW_WORKER.get_or_init(|| Self::new(8))
+    }
+
+    fn new(queue_capacity: usize) -> Self {
+        let (tx, rx) = std::sync::mpsc::sync_channel(queue_capacity);
+        std::thread::Builder::new()
+            .name("libraw-preview-worker".to_string())
+            .spawn(move || {
+                while let Ok(job) = rx.recv() {
+                    match job {
+                        RawPreviewJob::Decode { path, result_tx } => {
+                            let result = std::panic::catch_unwind(|| extract_preview_image(&path))
+                                .unwrap_or_else(|_| {
+                                    tracing::warn!("LibRaw 提取预览时发生 panic");
+                                    None
+                                });
+                            let _ = result_tx.send(result);
+                        }
+                        #[cfg(test)]
+                        RawPreviewJob::TestBlock {
+                            started_tx,
+                            release_rx,
+                            done_tx,
+                        } => {
+                            let _ = started_tx.send(());
+                            let _ = release_rx.recv();
+                            let _ = done_tx.send(());
+                        }
+                    }
+                }
+            })
+            .expect("failed to spawn libraw preview worker thread");
+
+        Self { tx }
+    }
+
+    fn try_submit(&self, job: RawPreviewJob) -> Result<(), std::sync::mpsc::TrySendError<RawPreviewJob>> {
+        self.tx.try_send(job)
+    }
+}
 
 /// 初始化 LibRaw 库
 fn get_libraw() -> Option<&'static LibrawLib> {
@@ -273,17 +334,25 @@ pub fn extract_preview_image_with_timeout(
     timeout_ms: u64,
 ) -> Option<DynamicImage> {
     use std::sync::mpsc;
-    use std::thread;
     use std::time::Duration;
 
-    let path = path.to_path_buf();
     let (tx, rx) = mpsc::channel();
+    let job = RawPreviewJob::Decode {
+        path: path.to_path_buf(),
+        result_tx: tx,
+    };
 
-    // 在独立线程中执行提取，避免阻塞调用线程
-    thread::spawn(move || {
-        let result = extract_preview_image(&path);
-        let _ = tx.send(result);
-    });
+    match RawPreviewWorker::global().try_submit(job) {
+        Ok(()) => {}
+        Err(mpsc::TrySendError::Full(_)) => {
+            tracing::debug!("LibRaw 预览提取队列已满，跳过本次请求");
+            return None;
+        }
+        Err(mpsc::TrySendError::Disconnected(_)) => {
+            tracing::warn!("LibRaw 预览提取工作线程已退出");
+            return None;
+        }
+    }
 
     // 等待结果或超时
     match rx.recv_timeout(Duration::from_millis(timeout_ms)) {
@@ -308,5 +377,85 @@ mod tests {
         // 这个测试只检查 is_available 不会 panic
         let available = is_available();
         println!("LibRaw available: {}", available);
+    }
+
+    #[test]
+    fn test_raw_preview_worker_is_serial() {
+        let worker = RawPreviewWorker::new(4);
+
+        let (started1_tx, started1_rx) = std::sync::mpsc::channel();
+        let (release1_tx, release1_rx) = std::sync::mpsc::channel();
+        let (done1_tx, done1_rx) = std::sync::mpsc::channel();
+        worker
+            .try_submit(RawPreviewJob::TestBlock {
+                started_tx: started1_tx,
+                release_rx: release1_rx,
+                done_tx: done1_tx,
+            })
+            .unwrap();
+        started1_rx.recv().unwrap();
+
+        let (started2_tx, started2_rx) = std::sync::mpsc::channel();
+        let (release2_tx, release2_rx) = std::sync::mpsc::channel();
+        let (done2_tx, done2_rx) = std::sync::mpsc::channel();
+        worker
+            .try_submit(RawPreviewJob::TestBlock {
+                started_tx: started2_tx,
+                release_rx: release2_rx,
+                done_tx: done2_tx,
+            })
+            .unwrap();
+
+        assert!(started2_rx.recv_timeout(std::time::Duration::from_millis(30)).is_err());
+
+        release1_tx.send(()).unwrap();
+        done1_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
+        started2_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
+
+        release2_tx.send(()).unwrap();
+        done2_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
+    }
+
+    #[test]
+    fn test_raw_preview_worker_queue_is_bounded() {
+        let worker = RawPreviewWorker::new(1);
+
+        let (started1_tx, started1_rx) = std::sync::mpsc::channel();
+        let (release1_tx, release1_rx) = std::sync::mpsc::channel();
+        let (done1_tx, _done1_rx) = std::sync::mpsc::channel();
+        worker
+            .try_submit(RawPreviewJob::TestBlock {
+                started_tx: started1_tx,
+                release_rx: release1_rx,
+                done_tx: done1_tx,
+            })
+            .unwrap();
+        started1_rx.recv().unwrap();
+
+        let (started2_tx, _started2_rx) = std::sync::mpsc::channel();
+        let (release2_tx, release2_rx) = std::sync::mpsc::channel();
+        let (done2_tx, _done2_rx) = std::sync::mpsc::channel();
+        worker
+            .try_submit(RawPreviewJob::TestBlock {
+                started_tx: started2_tx,
+                release_rx: release2_rx,
+                done_tx: done2_tx,
+            })
+            .unwrap();
+
+        let (started3_tx, _started3_rx) = std::sync::mpsc::channel();
+        let (_release3_tx, release3_rx) = std::sync::mpsc::channel();
+        let (done3_tx, _done3_rx) = std::sync::mpsc::channel();
+        assert!(matches!(
+            worker.try_submit(RawPreviewJob::TestBlock {
+                started_tx: started3_tx,
+                release_rx: release3_rx,
+                done_tx: done3_tx,
+            }),
+            Err(std::sync::mpsc::TrySendError::Full(_))
+        ));
+
+        release1_tx.send(()).unwrap();
+        release2_tx.send(()).unwrap();
     }
 }
