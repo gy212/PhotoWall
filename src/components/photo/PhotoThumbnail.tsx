@@ -3,7 +3,7 @@ import type { MouseEvent } from 'react';
 import clsx from 'clsx';
 import { getAssetUrl } from '@/services/api';
 import type { Photo } from '@/types';
-import { useThumbnail } from '@/hooks';
+import { useThumbnailProgressive } from '@/hooks';
 import type { ThumbnailSize } from '@/hooks';
 
 interface PhotoThumbnailProps {
@@ -29,20 +29,23 @@ const detectTauriRuntime = () => {
   if (typeof window === 'undefined') {
     return false;
   }
-  const tauriWindow = window as Window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  const tauriWindow = window as typeof window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
   return Boolean(tauriWindow.__TAURI__ ?? tauriWindow.__TAURI_INTERNALS__);
 };
+
+/** 完整缩略图尺寸（不包括 tiny） */
+type FullThumbnailSize = Exclude<ThumbnailSize, 'tiny'>;
 
 /**
  * 根据显示尺寸和设备像素比计算最优缩略图尺寸
  * 适配高分辨率屏幕（如 Retina 显示器）
  */
-const resolveThumbnailSize = (pixelSize: number): ThumbnailSize => {
+const resolveThumbnailSize = (pixelSize: number): FullThumbnailSize => {
   // 获取设备像素比，高分辨率屏幕需要更大的缩略图
   const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
   // 实际需要的像素尺寸 = 显示尺寸 × 设备像素比
   const actualPixelSize = pixelSize * dpr;
-  
+
   // 后端缩略图尺寸: small=300, medium=500, large=800
   // 降低阈值以确保有足够的清晰度余量，避免边界情况导致模糊
   if (actualPixelSize <= 200) return 'small';
@@ -60,7 +63,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   onContextMenu,
   onSelect,
 }: PhotoThumbnailProps) {
-  const [loaded, setLoaded] = useState(false);
+  const [tinyLoaded, setTinyLoaded] = useState(false);
+  const [fullLoaded, setFullLoaded] = useState(false);
   const [localError, setLocalError] = useState(false);
   const isTauriRuntime = useMemo(() => detectTauriRuntime(), []);
   const targetThumbnailSize = useMemo(() => {
@@ -68,7 +72,9 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     const resolved = resolveThumbnailSize(size);
     return resolved === 'large' ? 'medium' : resolved;
   }, [size]);
-  const { thumbnailUrl, isLoading: thumbnailLoading, error: thumbnailError } = useThumbnail(
+
+  // 使用渐进式加载：先加载 tiny 模糊占位图，再加载完整缩略图
+  const { tinyUrl, fullUrl, isLoadingFull, showTiny, error: thumbnailError } = useThumbnailProgressive(
     photo.filePath,
     photo.fileHash,
     {
@@ -89,12 +95,14 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     }
   }, [photo.filePath, isTauriRuntime]);
 
-  const imageUrl = isTauriRuntime ? (thumbnailUrl ?? fallbackAssetUrl) : fallbackAssetUrl;
+  // 完整图片 URL（优先使用缩略图，回退到原图）
+  const fullImageUrl = isTauriRuntime ? (fullUrl ?? fallbackAssetUrl) : fallbackAssetUrl;
 
   useEffect(() => {
-    setLoaded(false);
+    setTinyLoaded(false);
+    setFullLoaded(false);
     setLocalError(false);
-  }, [imageUrl, photo.photoId]);
+  }, [tinyUrl, fullUrl, photo.photoId]);
 
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -123,20 +131,24 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     [photo, onContextMenu]
   );
 
-  const handleLoad = useCallback(() => {
-    setLoaded(true);
+  const handleTinyLoad = useCallback(() => {
+    setTinyLoaded(true);
+  }, []);
+
+  const handleFullLoad = useCallback(() => {
+    setFullLoaded(true);
     setLocalError(false);
   }, []);
 
   const handleError = useCallback(() => {
-    setLoaded(true);
+    setFullLoaded(true);
     setLocalError(true);
   }, []);
 
   const hasError = isTauriRuntime ? Boolean(thumbnailError) || localError : localError;
   const isLoading = isTauriRuntime
-    ? thumbnailLoading || (!thumbnailUrl && !thumbnailError) || (!loaded && !hasError && Boolean(imageUrl))
-    : !loaded && !hasError && Boolean(imageUrl);
+    ? isLoadingFull || (!fullUrl && !thumbnailError && !tinyUrl) || (!fullLoaded && !hasError && Boolean(fullImageUrl) && !showTiny)
+    : !fullLoaded && !hasError && Boolean(fullImageUrl);
 
   return (
     <div
@@ -153,15 +165,30 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       aria-label={photo.fileName}
       aria-selected={selected}
     >
-      {!hasError && imageUrl && (
+      {/* 极小模糊占位图（渐进式加载第一阶段） */}
+      {!hasError && tinyUrl && showTiny && (
         <img
-          src={imageUrl}
+          src={tinyUrl}
+          alt=""
+          className={clsx(
+            'absolute inset-0 h-full w-full object-cover rounded-2xl transition-opacity duration-200',
+            'blur-sm scale-105', // 模糊并略微放大以隐藏像素化
+            tinyLoaded ? 'opacity-100' : 'opacity-0'
+          )}
+          onLoad={handleTinyLoad}
+          decoding="async"
+        />
+      )}
+      {/* 完整缩略图 */}
+      {!hasError && fullImageUrl && (
+        <img
+          src={fullImageUrl}
           alt={photo.fileName}
           className={clsx(
             'block h-full w-full object-cover rounded-2xl transition-opacity duration-200',
-            loaded ? 'opacity-100' : 'opacity-0'
+            fullLoaded ? 'opacity-100' : 'opacity-0'
           )}
-          onLoad={handleLoad}
+          onLoad={handleFullLoad}
           onError={handleError}
           decoding="async"
         />

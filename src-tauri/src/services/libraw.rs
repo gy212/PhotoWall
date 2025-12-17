@@ -5,7 +5,7 @@
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use image::{DynamicImage, RgbImage};
 
@@ -70,41 +70,54 @@ struct RawPreviewWorker {
     tx: std::sync::mpsc::SyncSender<RawPreviewJob>,
 }
 
+/// RAW 预览提取并发工作线程数
+const RAW_WORKER_COUNT: usize = 2;
+
 impl RawPreviewWorker {
     fn global() -> &'static Self {
         static RAW_PREVIEW_WORKER: OnceLock<RawPreviewWorker> = OnceLock::new();
-        RAW_PREVIEW_WORKER.get_or_init(|| Self::new(8))
+        RAW_PREVIEW_WORKER.get_or_init(|| Self::new(8, RAW_WORKER_COUNT))
     }
 
-    fn new(queue_capacity: usize) -> Self {
+    fn new(queue_capacity: usize, worker_count: usize) -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel(queue_capacity);
-        std::thread::Builder::new()
-            .name("libraw-preview-worker".to_string())
-            .spawn(move || {
-                while let Ok(job) = rx.recv() {
-                    match job {
-                        RawPreviewJob::Decode { path, result_tx } => {
-                            let result = std::panic::catch_unwind(|| extract_preview_image(&path))
-                                .unwrap_or_else(|_| {
-                                    tracing::warn!("LibRaw 提取预览时发生 panic");
-                                    None
-                                });
-                            let _ = result_tx.send(result);
-                        }
-                        #[cfg(test)]
-                        RawPreviewJob::TestBlock {
-                            started_tx,
-                            release_rx,
-                            done_tx,
-                        } => {
-                            let _ = started_tx.send(());
-                            let _ = release_rx.recv();
-                            let _ = done_tx.send(());
+        let rx = Arc::new(Mutex::new(rx));
+
+        for i in 0..worker_count {
+            let rx = rx.clone();
+            std::thread::Builder::new()
+                .name(format!("libraw-preview-worker-{}", i))
+                .spawn(move || {
+                    loop {
+                        let job = {
+                            let rx = rx.lock().unwrap();
+                            rx.recv()
+                        };
+                        match job {
+                            Ok(RawPreviewJob::Decode { path, result_tx }) => {
+                                let result = std::panic::catch_unwind(|| extract_preview_image(&path))
+                                    .unwrap_or_else(|_| {
+                                        tracing::warn!("LibRaw 提取预览时发生 panic");
+                                        None
+                                    });
+                                let _ = result_tx.send(result);
+                            }
+                            #[cfg(test)]
+                            Ok(RawPreviewJob::TestBlock {
+                                started_tx,
+                                release_rx,
+                                done_tx,
+                            }) => {
+                                let _ = started_tx.send(());
+                                let _ = release_rx.recv();
+                                let _ = done_tx.send(());
+                            }
+                            Err(_) => break, // Channel closed
                         }
                     }
-                }
-            })
-            .expect("failed to spawn libraw preview worker thread");
+                })
+                .expect("failed to spawn libraw preview worker thread");
+        }
 
         Self { tx }
     }
@@ -380,8 +393,9 @@ mod tests {
     }
 
     #[test]
-    fn test_raw_preview_worker_is_serial() {
-        let worker = RawPreviewWorker::new(4);
+    fn test_raw_preview_worker_concurrent() {
+        // With 2 workers, two jobs can run in parallel
+        let worker = RawPreviewWorker::new(4, 2);
 
         let (started1_tx, started1_rx) = std::sync::mpsc::channel();
         let (release1_tx, release1_rx) = std::sync::mpsc::channel();
@@ -406,19 +420,19 @@ mod tests {
             })
             .unwrap();
 
-        assert!(started2_rx.recv_timeout(std::time::Duration::from_millis(30)).is_err());
-
-        release1_tx.send(()).unwrap();
-        done1_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
+        // With 2 workers, job2 should start even while job1 is blocked
         started2_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
 
+        release1_tx.send(()).unwrap();
         release2_tx.send(()).unwrap();
+        done1_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
         done2_rx.recv_timeout(std::time::Duration::from_millis(200)).unwrap();
     }
 
     #[test]
     fn test_raw_preview_worker_queue_is_bounded() {
-        let worker = RawPreviewWorker::new(1);
+        // Single worker with queue capacity 1
+        let worker = RawPreviewWorker::new(1, 1);
 
         let (started1_tx, started1_rx) = std::sync::mpsc::channel();
         let (release1_tx, release1_rx) = std::sync::mpsc::channel();

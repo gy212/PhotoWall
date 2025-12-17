@@ -5,11 +5,16 @@ use std::path::PathBuf;
 use regex::Regex;
 use tauri::{AppHandle, Emitter, State};
 
+use crate::models::{PaginationParams, PhotoSortOptions};
 use crate::services::{
     IndexOptions, IndexResult, PhotoIndexer, ScanOptions, ScanResult, Scanner,
+    ThumbnailSize, ThumbnailTask,
 };
 use crate::utils::error::CommandError;
 use crate::AppState;
+
+/// 后台预生成缩略图的优先级（负数表示低优先级）
+const PREGENERATE_PRIORITY: i32 = -10;
 
 /// 扫描目录命令
 #[tauri::command]
@@ -49,6 +54,7 @@ pub async fn index_directory(
     path: String,
     options: Option<IndexOptions>,
 ) -> Result<IndexResult, CommandError> {
+    let path_clone = path.clone();
     let path = PathBuf::from(&path);
     let options = options.unwrap_or_default();
     let db = state.db.clone();
@@ -74,6 +80,11 @@ pub async fn index_directory(
     // 发送完成事件
     let _ = app.emit("index-finished", &result);
 
+    // 后台预生成缩略图
+    if result.indexed > 0 {
+        trigger_thumbnail_pregeneration(&app, &state, &[path_clone]).await;
+    }
+
     Ok(result)
 }
 
@@ -85,6 +96,7 @@ pub async fn index_directories(
     paths: Vec<String>,
     options: Option<IndexOptions>,
 ) -> Result<IndexResult, CommandError> {
+    let paths_clone = paths.clone();
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     let options = options.unwrap_or_default();
     let db = state.db.clone();
@@ -106,6 +118,11 @@ pub async fn index_directories(
     .map_err(|e| CommandError::from(e))?;
 
     let _ = app.emit("index-finished", &result);
+
+    // 后台预生成缩略图
+    if result.indexed > 0 {
+        trigger_thumbnail_pregeneration(&app, &state, &paths_clone).await;
+    }
 
     Ok(result)
 }
@@ -323,4 +340,81 @@ fn timestamp_to_iso8601(secs: i64) -> String {
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
         year, month, day, hours, minutes, seconds
     )
+}
+
+/// 预生成进度事件
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ThumbnailPregenerateProgress {
+    total: usize,
+    queued: usize,
+}
+
+/// 触发后台预生成缩略图
+async fn trigger_thumbnail_pregeneration(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    folder_paths: &[String],
+) {
+    let db = state.db.clone();
+    let queue = state.thumbnail_queue.clone();
+    let app_handle = app.clone();
+    let folder_paths = folder_paths.to_vec(); // 克隆以获取所有权
+
+    // 在后台线程执行，不阻塞索引返回
+    tokio::task::spawn_blocking(move || {
+        let mut total_queued = 0usize;
+        let mut total_photos = 0usize;
+
+        for folder_path in &folder_paths {
+            // 获取该文件夹下所有照片（包括子文件夹）
+            let pagination = PaginationParams { page: 1, page_size: 50000 };
+            let sort = PhotoSortOptions::default();
+
+            let photos = match db.get_photos_by_folder(folder_path, true, &pagination, &sort) {
+                Ok(result) => result.items,
+                Err(e) => {
+                    tracing::warn!("获取文件夹照片失败: {} -> {}", folder_path, e);
+                    continue;
+                }
+            };
+
+            total_photos += photos.len();
+
+            // 构建缩略图任务（低优先级）
+            let tasks: Vec<ThumbnailTask> = photos
+                .into_iter()
+                .map(|photo| {
+                    ThumbnailTask::new(
+                        PathBuf::from(&photo.file_path),
+                        photo.file_hash,
+                        ThumbnailSize::Medium, // 预生成 Medium 尺寸
+                        PREGENERATE_PRIORITY,
+                    )
+                })
+                .collect();
+
+            total_queued += tasks.len();
+
+            // 批量入队
+            queue.enqueue_batch(tasks);
+        }
+
+        if total_queued > 0 {
+            tracing::info!(
+                "后台预生成缩略图: {} 张照片已入队 (来自 {} 个文件夹)",
+                total_queued,
+                folder_paths.len()
+            );
+
+            // 发送预生成开始事件
+            let _ = app_handle.emit(
+                "thumbnail-pregenerate-started",
+                ThumbnailPregenerateProgress {
+                    total: total_photos,
+                    queued: total_queued,
+                },
+            );
+        }
+    });
 }

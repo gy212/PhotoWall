@@ -12,6 +12,8 @@ use crate::utils::error::{AppError, AppResult};
 /// 缩略图尺寸
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThumbnailSize {
+    /// 极小缩略图 (50x50) - 用于渐进式加载的模糊占位图
+    Tiny,
     /// 小缩略图 (150x150)
     Small,
     /// 中缩略图 (300x300)
@@ -25,6 +27,7 @@ impl ThumbnailSize {
     /// 为了支持高 DPI 屏幕，尺寸已经提高
     pub fn dimensions(&self) -> u32 {
         match self {
+            ThumbnailSize::Tiny => 50,     // 极小占位图，用于渐进式加载
             ThumbnailSize::Small => 300,   // 提高到 300，支持 2x DPI
             ThumbnailSize::Medium => 500,  // 提高到 500，支持高清显示
             ThumbnailSize::Large => 800,   // 提高到 800，大图预览
@@ -34,6 +37,7 @@ impl ThumbnailSize {
     /// 获取尺寸名称
     pub fn name(&self) -> &'static str {
         match self {
+            ThumbnailSize::Tiny => "tiny",
             ThumbnailSize::Small => "small",
             ThumbnailSize::Medium => "medium",
             ThumbnailSize::Large => "large",
@@ -43,6 +47,7 @@ impl ThumbnailSize {
     /// 从字符串解析
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
+            "tiny" => Some(ThumbnailSize::Tiny),
             "small" => Some(ThumbnailSize::Small),
             "medium" => Some(ThumbnailSize::Medium),
             "large" => Some(ThumbnailSize::Large),
@@ -118,7 +123,7 @@ impl ThumbnailService {
 
     /// 确保缓存目录结构存在
     fn ensure_cache_dirs(cache_dir: &Path) -> AppResult<()> {
-        for size in [ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
+        for size in [ThumbnailSize::Tiny, ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
             let dir = cache_dir.join(size.name());
             if !dir.exists() {
                 fs::create_dir_all(&dir)?;
@@ -319,9 +324,9 @@ impl ThumbnailService {
     /// - 扫描和硬解码仅在 Large 尺寸时作为最后手段
     /// - 所有 RAW 提取都有超时保护，避免单个文件卡住队列
     fn extract_raw_preview(&self, path: &Path, size: ThumbnailSize) -> Option<DynamicImage> {
-        // Small/Medium 使用较短超时（200ms），Large 允许更长（500ms）
+        // Tiny/Small/Medium 使用较短超时（200ms），Large 允许更长（500ms）
         let timeout_ms = match size {
-            ThumbnailSize::Small | ThumbnailSize::Medium => 200,
+            ThumbnailSize::Tiny | ThumbnailSize::Small | ThumbnailSize::Medium => 200,
             ThumbnailSize::Large => 500,
         };
 
@@ -341,9 +346,9 @@ impl ThumbnailService {
         }
 
         // 方法3 & 4: 仅在 Large 尺寸时使用更重的兜底方法
-        // Small/Medium 直接返回 None，由调用方生成占位图
+        // Tiny/Small/Medium 直接返回 None，由调用方生成占位图
         if size != ThumbnailSize::Large {
-            tracing::debug!("Small/Medium RAW 预览提取失败，跳过扫描兜底: {:?}", path);
+            tracing::debug!("Tiny/Small/Medium RAW 预览提取失败，跳过扫描兜底: {:?}", path);
             return None;
         }
 
@@ -859,7 +864,7 @@ impl ThumbnailService {
 
     /// 删除照片的所有缩略图
     pub fn delete_thumbnails(&self, file_hash: &str) -> AppResult<()> {
-        for size in [ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
+        for size in [ThumbnailSize::Tiny, ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
             let path = self.get_cache_path(file_hash, size);
             if path.exists() {
                 fs::remove_file(&path)?;
@@ -875,7 +880,7 @@ impl ThumbnailService {
         let max_age = std::time::Duration::from_secs(max_age_days * 24 * 60 * 60);
         let now = std::time::SystemTime::now();
 
-        for size in [ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
+        for size in [ThumbnailSize::Tiny, ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
             let dir = self.cache_dir.join(size.name());
             if !dir.exists() {
                 continue;
@@ -918,7 +923,7 @@ impl ThumbnailService {
     pub fn get_cache_stats(&self) -> AppResult<CacheStats> {
         let mut stats = CacheStats::default();
 
-        for size in [ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
+        for size in [ThumbnailSize::Tiny, ThumbnailSize::Small, ThumbnailSize::Medium, ThumbnailSize::Large] {
             let dir = self.cache_dir.join(size.name());
             if !dir.exists() {
                 continue;
@@ -968,10 +973,12 @@ mod tests {
     #[test]
     fn test_thumbnail_size() {
         // 更新后的高 DPI 支持尺寸
+        assert_eq!(ThumbnailSize::Tiny.dimensions(), 50);
         assert_eq!(ThumbnailSize::Small.dimensions(), 300);
         assert_eq!(ThumbnailSize::Medium.dimensions(), 500);
         assert_eq!(ThumbnailSize::Large.dimensions(), 800);
 
+        assert_eq!(ThumbnailSize::from_str("tiny"), Some(ThumbnailSize::Tiny));
         assert_eq!(ThumbnailSize::from_str("small"), Some(ThumbnailSize::Small));
         assert_eq!(ThumbnailSize::from_str("MEDIUM"), Some(ThumbnailSize::Medium));
         assert_eq!(ThumbnailSize::from_str("invalid"), None);

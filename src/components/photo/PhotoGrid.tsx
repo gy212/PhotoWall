@@ -4,6 +4,7 @@ import type { MouseEvent, CSSProperties } from 'react';
 import { VirtuosoGrid, type ContextProp, type GridComponents, type GridItemProps, type GridListProps, type ScrollerProps, type VirtuosoGridHandle, type ListRange } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
+import { enqueueThumbnails, isThumbnailCached } from '@/hooks';
 import type { Photo } from '@/types';
 
 type PhotoGridVirtuosoContext = {
@@ -138,6 +139,7 @@ const PhotoGrid = memo(function PhotoGrid({
   const prevLocationKeyRef = useRef(location.key);
   const [isScrolling, setIsScrolling] = useState(false);
   const virtuosoContext = useMemo<PhotoGridVirtuosoContext>(() => ({ loading }), [loading]);
+  const preloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Force recalculation after mount/route change so thumbnails render without manual scroll
   useEffect(() => {
@@ -158,6 +160,15 @@ const PhotoGrid = memo(function PhotoGrid({
     });
     return () => cancelAnimationFrame(rafId);
   }, [firstPhotoId, location.key]);
+
+  // Cleanup preload debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (preloadDebounceRef.current) {
+        clearTimeout(preloadDebounceRef.current);
+      }
+    };
+  }, []);
 
   // 使用 useMemo 创建 gridComponents，避免每次渲染都创建新实例导致 remount
   const gridComponents = useMemo<GridComponents<PhotoGridVirtuosoContext>>(
@@ -237,17 +248,47 @@ const PhotoGrid = memo(function PhotoGrid({
 
   const handleRangeChanged = useCallback(
     (range: ListRange) => {
-      if (!hasMore || loading || !onLoadMore || photos.length === 0) {
-        return;
+      // Data prefetch logic
+      if (hasMore && !loading && onLoadMore && photos.length > 0) {
+        const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
+        const prefetchThreshold = 40;
+        if (endIndex >= photos.length - prefetchThreshold) {
+          onLoadMore();
+        }
       }
 
-      const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
-      const prefetchThreshold = 40;
-      if (endIndex >= photos.length - prefetchThreshold) {
-        onLoadMore();
+      // Debounced thumbnail preloading
+      if (preloadDebounceRef.current) {
+        clearTimeout(preloadDebounceRef.current);
       }
+      preloadDebounceRef.current = setTimeout(() => {
+        if (photos.length === 0) return;
+
+        const preloadCount = 20;
+        const startIndex = typeof range?.startIndex === 'number' ? range.startIndex : 0;
+        const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
+        const start = Math.max(0, startIndex - preloadCount);
+        const end = Math.min(photos.length - 1, endIndex + preloadCount);
+
+        const tasks = photos
+          .slice(start, end + 1)
+          .filter(p => !isThumbnailCached(p.fileHash, 'small'))
+          .map((p, idx) => ({
+            sourcePath: p.filePath,
+            fileHash: p.fileHash,
+            size: 'small' as const,
+            // Higher priority for items closer to visible range center
+            priority: 50 - Math.abs(idx - (end - start) / 2),
+          }));
+
+        if (tasks.length > 0) {
+          enqueueThumbnails(tasks).catch(() => {
+            // Ignore preload errors
+          });
+        }
+      }, 150);
     },
-    [hasMore, loading, onLoadMore, photos.length]
+    [hasMore, loading, onLoadMore, photos]
   );
 
   // 空状态

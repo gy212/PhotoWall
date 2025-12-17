@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 
-export type ThumbnailSize = 'small' | 'medium' | 'large';
+export type ThumbnailSize = 'tiny' | 'small' | 'medium' | 'large';
 
 export interface ThumbnailOptions {
   /** 缩略图尺寸 */
@@ -98,7 +98,7 @@ const detectTauriRuntime = (): boolean => {
   if (typeof window === 'undefined') {
     return false;
   }
-  const tauriWindow = window as Window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  const tauriWindow = window as typeof window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
   return Boolean(tauriWindow.__TAURI__ ?? tauriWindow.__TAURI_INTERNALS__);
 };
 
@@ -130,6 +130,7 @@ export function useThumbnail(
   fileHash: string,
   options: ThumbnailOptions = {},
 ): UseThumbnailResult {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 故意只依赖具体属性值，避免 options 引用变化导致不必要的重新计算
   const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [
     options.size,
     options.priority,
@@ -331,6 +332,71 @@ export function useThumbnail(
       cancel,
     }),
     [thumbnailUrl, isLoading, error, reload, cancel]
+  );
+}
+
+/**
+ * 检查缩略图是否已在内存缓存中
+ */
+export function isThumbnailCached(fileHash: string, size: ThumbnailSize): boolean {
+  return thumbnailCache.has(getCacheKey(fileHash, size));
+}
+
+export interface UseThumbnailProgressiveResult {
+  /** 极小缩略图 URL（用于模糊占位） */
+  tinyUrl: string | null;
+  /** 完整缩略图 URL */
+  fullUrl: string | null;
+  /** 极小缩略图是否正在加载 */
+  isLoadingTiny: boolean;
+  /** 完整缩略图是否正在加载 */
+  isLoadingFull: boolean;
+  /** 是否应显示模糊的极小缩略图（tiny 已加载但 full 未加载） */
+  showTiny: boolean;
+  /** 错误信息 */
+  error: Error | null;
+}
+
+/**
+ * 渐进式缩略图加载 Hook
+ *
+ * 先加载极小的模糊占位图（50px），再加载完整缩略图。
+ * 提供更好的用户体验，避免空白等待。
+ *
+ * @param sourcePath 源图片路径
+ * @param fileHash 文件哈希
+ * @param options 选项（size 指定完整缩略图尺寸，默认 'small'）
+ */
+export function useThumbnailProgressive(
+  sourcePath: string,
+  fileHash: string,
+  options: Omit<ThumbnailOptions, 'size'> & { size?: Exclude<ThumbnailSize, 'tiny'> } = {},
+): UseThumbnailProgressiveResult {
+  const fullSize = options.size ?? 'small';
+
+  // 加载极小缩略图（无延迟，立即加载）
+  const tiny = useThumbnail(sourcePath, fileHash, {
+    ...options,
+    size: 'tiny',
+    loadDelay: 0,
+  });
+
+  // 加载完整缩略图（使用配置的延迟）
+  const full = useThumbnail(sourcePath, fileHash, {
+    ...options,
+    size: fullSize,
+  });
+
+  return useMemo(
+    () => ({
+      tinyUrl: tiny.thumbnailUrl,
+      fullUrl: full.thumbnailUrl,
+      isLoadingTiny: tiny.isLoading,
+      isLoadingFull: full.isLoading,
+      showTiny: Boolean(tiny.thumbnailUrl && !full.thumbnailUrl),
+      error: full.error ?? tiny.error,
+    }),
+    [tiny.thumbnailUrl, tiny.isLoading, tiny.error, full.thumbnailUrl, full.isLoading, full.error]
   );
 }
 
