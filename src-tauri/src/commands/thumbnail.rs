@@ -20,6 +20,22 @@ pub struct ThumbnailResponse {
     pub generation_time_ms: Option<u64>,
 }
 
+/// 判断文件是否为 RAW 格式
+fn is_raw_file(path: &str) -> bool {
+    let path = std::path::Path::new(path);
+    if let Some(ext) = path.extension() {
+        let ext = ext.to_string_lossy().to_lowercase();
+        matches!(
+            ext.as_str(),
+            "dng" | "cr2" | "cr3" | "nef" | "nrw" | "arw" | "srf" | "sr2"
+                | "orf" | "raf" | "rw2" | "pef" | "srw" | "raw" | "rwl" | "3fr"
+                | "erf" | "kdc" | "dcr" | "x3f"
+        )
+    } else {
+        false
+    }
+}
+
 /// 生成（或获取缓存中的）缩略图
 ///
 /// - source_path: 源图片绝对路径
@@ -38,10 +54,15 @@ pub async fn generate_thumbnail(
         .and_then(ThumbnailSize::from_str)
         .unwrap_or(ThumbnailSize::Medium);
 
-    // 限制并发 + 将重活移出 async 线程，避免 UI 卡顿
-    let _permit = state
-        .thumbnail_limiter
-        .clone()
+    // 根据文件类型选择不同的 limiter：RAW 和普通格式隔离，避免 RAW 慢任务堵塞队列
+    let is_raw = is_raw_file(&source_path);
+    let limiter = if is_raw {
+        state.thumbnail_limiter_raw.clone()
+    } else {
+        state.thumbnail_limiter.clone()
+    };
+
+    let _permit = limiter
         .acquire_owned()
         .await
         .map_err(|_| CommandError::from(AppError::General("Thumbnail limiter closed".into())))?;

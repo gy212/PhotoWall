@@ -317,10 +317,18 @@ impl ThumbnailService {
     /// - LibRaw 已内置"选最大预览"策略
     /// - Small/Medium 不再使用扫描兜底，避免 IO 开销
     /// - 扫描和硬解码仅在 Large 尺寸时作为最后手段
+    /// - 所有 RAW 提取都有超时保护，避免单个文件卡住队列
     fn extract_raw_preview(&self, path: &Path, size: ThumbnailSize) -> Option<DynamicImage> {
+        // Small/Medium 使用较短超时（200ms），Large 允许更长（500ms）
+        let timeout_ms = match size {
+            ThumbnailSize::Small | ThumbnailSize::Medium => 200,
+            ThumbnailSize::Large => 500,
+        };
+
         // 方法1: LibRaw 提取 embedded preview（首选，行业级实现，自动选最大预览）
+        // 使用带超时的版本，避免单个 RAW 文件卡住整个队列
         if super::libraw::is_available() {
-            if let Some(img) = super::libraw::extract_preview_image(path) {
+            if let Some(img) = super::libraw::extract_preview_image_with_timeout(path, timeout_ms) {
                 tracing::debug!("LibRaw 提取到嵌入预览: {:?}", path);
                 return Some(img);
             }

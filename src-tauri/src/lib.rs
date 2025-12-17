@@ -56,7 +56,10 @@ pub struct AppState {
     pub db: Arc<Database>,
     pub thumbnail_service: services::ThumbnailService,
     pub thumbnail_queue: Arc<services::ThumbnailQueue>,
+    /// 普通格式（JPEG/PNG/WebP 等）缩略图并发限制
     pub thumbnail_limiter: Arc<Semaphore>,
+    /// RAW 格式缩略图并发限制（隔离慢任务，避免堵塞普通缩略图）
+    pub thumbnail_limiter_raw: Arc<Semaphore>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -89,9 +92,10 @@ pub fn run() {
         db: Arc::new(database),
         thumbnail_service,
         thumbnail_queue: Arc::new(thumbnail_queue),
-        // 控制同时生成缩略图的数量，避免 CPU/IO 瞬时被打满导致 UI 卡顿
-        // 注：这主要保护前端直接调用 generate_thumbnail 的路径；队列有独立工作线程池
-        thumbnail_limiter: Arc::new(Semaphore::new(2)),
+        // 普通格式并发限制：适当提高到 4，因为 JPEG/PNG 解码较快
+        thumbnail_limiter: Arc::new(Semaphore::new(4)),
+        // RAW 格式并发限制：只允许 1 个，避免慢任务堵塞整个队列
+        thumbnail_limiter_raw: Arc::new(Semaphore::new(1)),
     };
 
     tracing::info!("数据库初始化完成");

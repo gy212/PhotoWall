@@ -13,6 +13,8 @@ interface PhotoThumbnailProps {
   size?: number;
   /** 是否选中 */
   selected?: boolean;
+  /** 是否正在滚动（滚动时延迟加载缩略图） */
+  isScrolling?: boolean;
   /** 点击事件 */
   onClick?: (photo: Photo, event: MouseEvent) => void;
   /** 双击事件 */
@@ -52,6 +54,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   photo,
   size = 200,
   selected = false,
+  isScrolling = false,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -70,9 +73,10 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     photo.fileHash,
     {
       size: targetThumbnailSize,
-      enabled: isTauriRuntime,
+      // 滚动时完全禁用加载，停止滚动后才开始
+      enabled: isTauriRuntime && !isScrolling,
       // 滚动时防抖：快速划过的条目通常会在延迟内卸载，从而避免发起后端生成请求
-      loadDelay: 120,
+      loadDelay: 80,
     }
   );
 

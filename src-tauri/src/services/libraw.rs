@@ -265,6 +265,40 @@ pub fn extract_preview_image(path: &Path) -> Option<DynamicImage> {
     }
 }
 
+/// 带超时的 RAW 预览提取（避免单个 RAW 文件卡住整个队列）
+///
+/// 超时后返回 None，调用方应使用占位图
+pub fn extract_preview_image_with_timeout(
+    path: &Path,
+    timeout_ms: u64,
+) -> Option<DynamicImage> {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    let path = path.to_path_buf();
+    let (tx, rx) = mpsc::channel();
+
+    // 在独立线程中执行提取，避免阻塞调用线程
+    thread::spawn(move || {
+        let result = extract_preview_image(&path);
+        let _ = tx.send(result);
+    });
+
+    // 等待结果或超时
+    match rx.recv_timeout(Duration::from_millis(timeout_ms)) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            tracing::warn!("RAW 预览提取超时 ({}ms)", timeout_ms);
+            None
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            tracing::warn!("RAW 预览提取线程异常退出");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

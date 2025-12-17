@@ -107,6 +107,7 @@ const PhotoGrid = memo(function PhotoGrid({
           photo={photo}
           size={thumbnailSize}
           selected={selectedIds.has(photo.photoId)}
+          isScrolling={isScrolling}
           onClick={onPhotoClick}
           onDoubleClick={onPhotoDoubleClick}
           onContextMenu={onPhotoContextMenu}
@@ -114,7 +115,7 @@ const PhotoGrid = memo(function PhotoGrid({
         />
       );
     },
-    [photos, thumbnailSize, selectedIds, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
+    [photos, thumbnailSize, selectedIds, isScrolling, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
   );
 
   // 加载更多
