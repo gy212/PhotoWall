@@ -1,26 +1,92 @@
-import { memo, useMemo, useCallback, useRef, useEffect, useState, forwardRef } from 'react';
+import { memo, useMemo, useCallback, useRef, useEffect, useLayoutEffect, useState, forwardRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import type { MouseEvent, HTMLAttributes, CSSProperties } from 'react';
-import { VirtuosoGrid, VirtuosoGridHandle, GridComponents } from 'react-virtuoso';
+import type { MouseEvent, CSSProperties } from 'react';
+import { VirtuosoGrid, type ContextProp, type GridComponents, type GridItemProps, type GridListProps, type ScrollerProps, type VirtuosoGridHandle, type ListRange } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
 import type { Photo } from '@/types';
 
-// 自定义 Scroller：强制滚动条始终占位，避免宽度变化导致的抖动
-const GridScroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ style, ...props }, ref) => (
-    <div
-      ref={ref}
-      {...props}
-      style={{
-        ...style,
-        overflowY: 'scroll',           // 强制滚动条始终占位
-        scrollbarGutter: 'stable',     // 现代 Chromium 支持，进一步稳定宽度
-        overflowAnchor: 'none',        // 关掉滚动锚定
-      } as CSSProperties}
-    />
-  )
+type PhotoGridVirtuosoContext = {
+  loading: boolean;
+};
+
+type GridScrollerProps = Omit<ScrollerProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>;
+
+type ScrollbarMode = 'auto' | 'stable-gutter' | 'force-scroll';
+let cachedScrollbarMode: ScrollbarMode | null = null;
+
+function resolveScrollbarMode(): ScrollbarMode {
+  if (cachedScrollbarMode) {
+    return cachedScrollbarMode;
+  }
+
+  if (typeof document === 'undefined' || !document.body) {
+    return 'auto';
+  }
+
+  const outer = document.createElement('div');
+  outer.style.visibility = 'hidden';
+  outer.style.overflow = 'scroll';
+  outer.style.position = 'absolute';
+  outer.style.top = '-9999px';
+  outer.style.width = '100px';
+  outer.style.height = '100px';
+  document.body.appendChild(outer);
+
+  const scrollbarWidth = outer.offsetWidth - outer.clientWidth;
+  document.body.removeChild(outer);
+
+  if (scrollbarWidth === 0) {
+    cachedScrollbarMode = 'auto';
+    return cachedScrollbarMode;
+  }
+
+  const cssApi = typeof window !== 'undefined' ? window.CSS : undefined;
+  const supportsGutter =
+    cssApi !== undefined &&
+    typeof cssApi.supports === 'function' &&
+    cssApi.supports('scrollbar-gutter: stable');
+
+  cachedScrollbarMode = supportsGutter ? 'stable-gutter' : 'force-scroll';
+  return cachedScrollbarMode;
+}
+
+// 自定义 Scroller：仅在需要的系统上稳定滚动条占位，避免宽度变化导致的抖动
+const GridScroller = forwardRef<HTMLDivElement, GridScrollerProps>(
+  ({ style, context: _context, ...props }, ref) => {
+    const [scrollbarMode, setScrollbarMode] = useState<ScrollbarMode>('auto');
+
+    useLayoutEffect(() => {
+      setScrollbarMode(resolveScrollbarMode());
+    }, []);
+
+    return (
+      <div
+        ref={ref}
+        {...props}
+        style={{
+          ...style,
+          overflowY: scrollbarMode === 'force-scroll' ? 'scroll' : 'auto',
+          ...(scrollbarMode === 'stable-gutter' ? ({ scrollbarGutter: 'stable' } as CSSProperties) : {}),
+          overflowAnchor: 'none',
+        }}
+      />
+    );
+  }
 );
+
+const GridFooter = memo(function GridFooter({ context }: ContextProp<PhotoGridVirtuosoContext>) {
+  if (!context.loading) {
+    return null;
+  }
+
+  return (
+    <div className="flex w-full items-center justify-center py-4">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+      <span className="ml-2 text-sm text-gray-500">加载中...</span>
+    </div>
+  );
+});
 
 interface PhotoGridProps {
   /** 照片列表 */
@@ -71,6 +137,7 @@ const PhotoGrid = memo(function PhotoGrid({
   const prevFirstPhotoIdRef = useRef<number | null>(null);
   const prevLocationKeyRef = useRef(location.key);
   const [isScrolling, setIsScrolling] = useState(false);
+  const virtuosoContext = useMemo<PhotoGridVirtuosoContext>(() => ({ loading }), [loading]);
 
   // Force recalculation after mount/route change so thumbnails render without manual scroll
   useEffect(() => {
@@ -93,11 +160,11 @@ const PhotoGrid = memo(function PhotoGrid({
   }, [firstPhotoId, location.key]);
 
   // 使用 useMemo 创建 gridComponents，避免每次渲染都创建新实例导致 remount
-  const gridComponents = useMemo<GridComponents<Photo>>(
+  const gridComponents = useMemo<GridComponents<PhotoGridVirtuosoContext>>(
     () => ({
       Scroller: GridScroller,
-      List: forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & { style?: CSSProperties }>(
-        ({ style, children, ...props }, ref) => (
+      List: forwardRef<HTMLDivElement, Omit<GridListProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>>(
+        ({ style, children, context: _context, ...props }, ref) => (
           <div
             ref={ref}
             {...props}
@@ -113,27 +180,25 @@ const PhotoGrid = memo(function PhotoGrid({
           </div>
         )
       ),
-      Item: ({ children, ...props }) => (
-        <div
-          {...props}
-          style={{
-            width: `${thumbnailSize}px`,
-            height: `${thumbnailSize}px`,
-            boxSizing: 'border-box',
-          }}
-        >
-          {children}
-        </div>
-      ),
-      Footer: () =>
-        loading ? (
-          <div className="flex w-full items-center justify-center py-4">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-            <span className="ml-2 text-sm text-gray-500">加载中...</span>
+      Item: forwardRef<HTMLDivElement, Omit<GridItemProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>>(
+        ({ children, style, context: _context, ...props }, ref) => (
+          <div
+            ref={ref}
+            {...props}
+            style={{
+              ...style,
+              width: `${thumbnailSize}px`,
+              height: `${thumbnailSize}px`,
+              boxSizing: 'border-box',
+            }}
+          >
+            {children}
           </div>
-        ) : null,
+        )
+      ),
+      Footer: GridFooter,
     }),
-    [gap, thumbnailSize, loading]
+    [gap, thumbnailSize]
   );
 
   // 渲染单个照片 - 使用 data 模式，直接接收 photo 对象
@@ -171,7 +236,7 @@ const PhotoGrid = memo(function PhotoGrid({
   }, [loading, hasMore, onLoadMore]);
 
   const handleRangeChanged = useCallback(
-    (range: any) => {
+    (range: ListRange) => {
       if (!hasMore || loading || !onLoadMore || photos.length === 0) {
         return;
       }
@@ -216,10 +281,11 @@ const PhotoGrid = memo(function PhotoGrid({
 
   return (
     <div className="h-full w-full">
-      <VirtuosoGrid
+      <VirtuosoGrid<Photo, PhotoGridVirtuosoContext>
         ref={virtuosoRef}
         key={`grid-${location.key}-${thumbnailSize}`}
         data={photos}
+        context={virtuosoContext}
         computeItemKey={computeItemKey}
         initialItemCount={Math.min(photos.length, 50)}
         overscan={800}
