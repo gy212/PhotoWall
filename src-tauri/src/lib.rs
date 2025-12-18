@@ -8,9 +8,13 @@ pub mod models;
 pub mod services;
 pub mod utils;
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use tokio::sync::Semaphore;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use commands::{
     // greet
@@ -48,6 +52,8 @@ use commands::{
     get_auto_sync_enabled, trigger_sync_now, validate_folder_path,
     // folders
     get_folder_tree, get_folder_children, get_photos_by_folder, get_folder_photo_count,
+    // logging
+    log_frontend,
 };
 use db::Database;
 
@@ -62,15 +68,57 @@ pub struct AppState {
     pub thumbnail_limiter_raw: Arc<Semaphore>,
 }
 
+/// 获取日志目录路径
+pub fn get_log_dir() -> PathBuf {
+    std::env::current_dir()
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join("logs")
+}
+
+/// 清理超过指定天数的旧日志文件
+fn cleanup_old_logs(log_dir: &Path, keep_days: u64) {
+    let cutoff = SystemTime::now() - Duration::from_secs(keep_days * 24 * 60 * 60);
+
+    if let Ok(entries) = std::fs::read_dir(log_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "log").unwrap_or(false) {
+                if let Ok(metadata) = entry.metadata() {
+                    if let Ok(modified) = metadata.modified() {
+                        if modified < cutoff {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 初始化日志系统
+fn init_logging() {
+    let log_dir = get_log_dir();
+    std::fs::create_dir_all(&log_dir).ok();
+
+    // 清理超过 7 天的旧日志
+    cleanup_old_logs(&log_dir, 7);
+
+    // 后端日志: backend.YYYY-MM-DD.log
+    let backend_appender = RollingFileAppender::new(Rotation::DAILY, &log_dir, "backend.log");
+
+    let env_filter = EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into());
+
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt::layer().with_writer(std::io::stdout))
+        .with(fmt::layer().with_writer(backend_appender).with_ansi(false))
+        .init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 初始化日志系统
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into()),
-        )
-        .init();
+    init_logging();
 
     tracing::info!("PhotoWall 启动中...");
 
@@ -206,6 +254,8 @@ pub fn run() {
             get_folder_children,
             get_photos_by_folder,
             get_folder_photo_count,
+            // logging
+            log_frontend,
         ])
         .setup(|app| {
             // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件

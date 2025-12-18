@@ -3,7 +3,7 @@
 //! 提供 LibRaw 库的 Rust 封装，用于从 RAW 文件中提取嵌入预览图。
 //! 采用动态链接方式，运行时加载 libraw.dll。
 
-use std::ffi::{c_char, c_int, c_uint, c_void, CString};
+use std::ffi::{c_char, c_int, c_uint, c_ushort, c_void, CString};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -18,15 +18,16 @@ const LIBRAW_THUMBNAIL_JPEG: c_int = 1;
 const LIBRAW_THUMBNAIL_BITMAP: c_int = 2;
 
 /// LibRaw 处理后的图像结构
+/// 注意：height/width/colors/bits 在 LibRaw C 结构中是 ushort (16-bit)
 #[repr(C)]
 struct LibrawProcessedImage {
-    image_type: c_int,      // 图像类型
-    height: c_uint,         // 高度
-    width: c_uint,          // 宽度
-    colors: c_uint,         // 颜色通道数
-    bits: c_uint,           // 每通道位数
-    data_size: c_uint,      // 数据大小
-    data: [u8; 1],          // 柔性数组（实际数据）
+    image_type: c_int,       // 图像类型 (enum LibRaw_image_formats)
+    height: c_ushort,        // 高度 (ushort)
+    width: c_ushort,         // 宽度 (ushort)
+    colors: c_ushort,        // 颜色通道数 (ushort)
+    bits: c_ushort,          // 每通道位数 (ushort)
+    data_size: c_uint,       // 数据大小
+    data: [u8; 1],           // 柔性数组（实际数据）
 }
 
 /// LibRaw 函数指针类型
@@ -310,8 +311,8 @@ pub fn extract_preview(path: &Path) -> Option<PreviewResult> {
                     img_ref.width, img_ref.height, img_ref.colors
                 );
                 Some(PreviewResult::Bitmap {
-                    width: img_ref.width,
-                    height: img_ref.height,
+                    width: img_ref.width as u32,
+                    height: img_ref.height as u32,
                     data: data_slice.to_vec(),
                 })
             }

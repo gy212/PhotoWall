@@ -54,6 +54,10 @@ rayon = "1"
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+
+# 时间处理
+chrono = "0.4"
 
 # 错误处理
 thiserror = "2"

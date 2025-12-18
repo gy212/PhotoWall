@@ -12,6 +12,7 @@ pub mod file_ops;
 pub mod settings;
 pub mod folder_sync;
 pub mod folders;
+pub mod logging;
 
 pub use greet::*;
 pub use scanner::*;
@@ -23,3 +24,4 @@ pub use file_ops::*;
 pub use settings::*;
 pub use folder_sync::*;
 pub use folders::*;
+pub use logging::*;
