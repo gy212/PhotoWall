@@ -38,7 +38,7 @@ use commands::{
     reorder_album_photos, remove_photos_from_album,
     // thumbnails
     generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
-    get_libraw_status,
+    get_libraw_status, get_thumbnail_stats, check_thumbnails_cached, warm_thumbnail_cache,
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
@@ -179,6 +179,9 @@ pub fn run() {
             cancel_thumbnail,
             get_thumbnail_cache_path,
             get_libraw_status,
+            get_thumbnail_stats,
+            check_thumbnails_cached,
+            warm_thumbnail_cache,
             // file_ops
             import_photos,
             export_photos,
@@ -204,6 +207,11 @@ pub fn run() {
             get_photos_by_folder,
             get_folder_photo_count,
         ])
+        .setup(|app| {
+            // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件
+            services::thumbnail_queue::set_app_handle(app.handle().clone());
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

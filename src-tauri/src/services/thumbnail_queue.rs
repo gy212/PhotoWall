@@ -3,11 +3,47 @@
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 use std::path::PathBuf;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
+
+use serde::Serialize;
+use tauri::{AppHandle, Emitter};
 
 use crate::services::{ThumbnailService, ThumbnailSize};
 use crate::utils::error::AppResult;
+
+/// 缩略图生成完成事件的 payload
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailReadyPayload {
+    pub file_hash: String,
+    pub size: String,
+    pub path: String,
+}
+
+/// 全局 AppHandle 存储（用于 worker 线程发送事件）
+static APP_HANDLE: RwLock<Option<AppHandle>> = RwLock::new(None);
+
+/// 设置全局 AppHandle（在应用启动时调用）
+pub fn set_app_handle(handle: AppHandle) {
+    if let Ok(mut guard) = APP_HANDLE.write() {
+        *guard = Some(handle);
+    }
+}
+
+/// 发送 thumbnail-ready 事件
+fn emit_thumbnail_ready(file_hash: &str, size: ThumbnailSize, path: &str) {
+    if let Ok(guard) = APP_HANDLE.read() {
+        if let Some(ref handle) = *guard {
+            let payload = ThumbnailReadyPayload {
+                file_hash: file_hash.to_string(),
+                size: size.name().to_string(),
+                path: path.to_string(),
+            };
+            let _ = handle.emit("thumbnail-ready", payload);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ThumbnailTask {
@@ -138,8 +174,18 @@ impl ThumbnailQueue {
                     }
 
                     // 执行
-                    if let Err(e) = service.get_or_generate(&task.source_path, &task.file_hash, task.size) {
-                        tracing::warn!("缩略图任务失败: {} -> {}", task.source_path.display(), e);
+                    match service.get_or_generate(&task.source_path, &task.file_hash, task.size) {
+                        Ok(result) => {
+                            // 发送 thumbnail-ready 事件
+                            emit_thumbnail_ready(
+                                &task.file_hash,
+                                task.size,
+                                &result.path.to_string_lossy(),
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!("缩略图任务失败: {} -> {}", task.source_path.display(), e);
+                        }
                     }
                 }
             }
@@ -175,6 +221,13 @@ impl ThumbnailQueue {
         let (lock, _) = &*self.inner;
         let mut state = lock.lock().unwrap();
         state.cancelled.clear();
+    }
+
+    /// 获取当前队列长度
+    pub fn len(&self) -> usize {
+        let (lock, _) = &*self.inner;
+        let state = lock.lock().unwrap();
+        state.heap.len()
     }
 
     /// 停止工作线程

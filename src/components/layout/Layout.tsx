@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
 import Sidebar from '../sidebar/Sidebar';
 import StatusBar from './StatusBar';
 
@@ -6,6 +8,31 @@ import StatusBar from './StatusBar';
  * 主布局组件 - 新UI设计
  */
 function Layout() {
+  const warmCacheTriggered = useRef(false);
+
+  // 启动后延迟触发暖缓存
+  useEffect(() => {
+    if (warmCacheTriggered.current) return;
+    warmCacheTriggered.current = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await invoke<{ queued: number; alreadyCached: number }>('warm_thumbnail_cache', {
+          strategy: 'recent',
+          limit: 100,
+        });
+        if (result.queued > 0) {
+          console.debug(`[暖缓存] 已入队 ${result.queued} 个任务，${result.alreadyCached} 个已有缓存`);
+        }
+      } catch (err) {
+        // 暖缓存失败不影响正常使用
+        console.debug('[暖缓存] 失败:', err);
+      }
+    }, 2000); // 启动后 2 秒
+
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* 侧边栏 */}

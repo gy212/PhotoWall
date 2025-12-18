@@ -14,7 +14,9 @@ use crate::utils::error::CommandError;
 use crate::AppState;
 
 /// 后台预生成缩略图的优先级（负数表示低优先级）
-const PREGENERATE_PRIORITY: i32 = -10;
+/// 预生成优先级：tiny + small 使用中等优先级，medium + large 使用低优先级
+const PREGENERATE_PRIORITY_HIGH: i32 = 0;   // tiny + small
+const PREGENERATE_PRIORITY_LOW: i32 = -10;  // medium + large (保留用于未来)
 
 /// 扫描目录命令
 #[tauri::command]
@@ -381,18 +383,25 @@ async fn trigger_thumbnail_pregeneration(
 
             total_photos += photos.len();
 
-            // 构建缩略图任务（低优先级）
-            let tasks: Vec<ThumbnailTask> = photos
-                .into_iter()
-                .map(|photo| {
-                    ThumbnailTask::new(
-                        PathBuf::from(&photo.file_path),
-                        photo.file_hash,
-                        ThumbnailSize::Medium, // 预生成 Medium 尺寸
-                        PREGENERATE_PRIORITY,
-                    )
-                })
-                .collect();
+            // 构建缩略图任务：tiny + small 使用中等优先级（用户最常看到的尺寸）
+            let mut tasks: Vec<ThumbnailTask> = Vec::with_capacity(photos.len() * 2);
+            for photo in photos {
+                let path = PathBuf::from(&photo.file_path);
+                // tiny 尺寸（用于渐进式加载的模糊占位图）
+                tasks.push(ThumbnailTask::new(
+                    path.clone(),
+                    photo.file_hash.clone(),
+                    ThumbnailSize::Tiny,
+                    PREGENERATE_PRIORITY_HIGH,
+                ));
+                // small 尺寸（网格视图主要使用）
+                tasks.push(ThumbnailTask::new(
+                    path,
+                    photo.file_hash,
+                    ThumbnailSize::Small,
+                    PREGENERATE_PRIORITY_HIGH,
+                ));
+            }
 
             total_queued += tasks.len();
 

@@ -1,13 +1,20 @@
 //! 缩略图相关 Tauri 命令
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::services::{ThumbnailSize, ThumbnailTask};
 use crate::utils::error::{AppError, CommandError};
 use crate::AppState;
+
+// ============ 全局统计 ============
+static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+static TOTAL_GEN_TIME_MS: AtomicU64 = AtomicU64::new(0);
+static GEN_COUNT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,8 +27,111 @@ pub struct ThumbnailResponse {
     pub generation_time_ms: Option<u64>,
 }
 
+// ============ 统计相关结构体和命令 ============
+
+/// 缩略图统计信息
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailStats {
+    /// 缓存命中次数
+    pub cache_hits: u64,
+    /// 缓存未命中次数
+    pub cache_misses: u64,
+    /// 缓存命中率 (0.0 - 1.0)
+    pub hit_rate: f64,
+    /// 平均生成耗时（毫秒）
+    pub avg_generation_time_ms: f64,
+    /// 当前队列深度
+    pub queue_depth: usize,
+}
+
+/// 获取缩略图统计信息
+#[tauri::command]
+pub async fn get_thumbnail_stats(state: State<'_, AppState>) -> Result<ThumbnailStats, CommandError> {
+    let hits = CACHE_HITS.load(Ordering::Relaxed);
+    let misses = CACHE_MISSES.load(Ordering::Relaxed);
+    let total = hits + misses;
+    let hit_rate = if total > 0 {
+        hits as f64 / total as f64
+    } else {
+        0.0
+    };
+
+    let gen_count = GEN_COUNT.load(Ordering::Relaxed);
+    let total_time = TOTAL_GEN_TIME_MS.load(Ordering::Relaxed);
+    let avg_time = if gen_count > 0 {
+        total_time as f64 / gen_count as f64
+    } else {
+        0.0
+    };
+
+    let queue_depth = state.thumbnail_queue.len();
+
+    Ok(ThumbnailStats {
+        cache_hits: hits,
+        cache_misses: misses,
+        hit_rate,
+        avg_generation_time_ms: avg_time,
+        queue_depth,
+    })
+}
+
+// ============ 批量缓存检查 ============
+
+/// 批量缓存检查输入
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckCacheInput {
+    pub file_hash: String,
+    pub size: Option<String>,
+}
+
+/// 批量缓存检查结果
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckCacheResult {
+    pub file_hash: String,
+    pub size: String,
+    pub cached: bool,
+    pub path: Option<String>,
+}
+
+/// 批量检查缩略图缓存是否存在
+#[tauri::command]
+pub async fn check_thumbnails_cached(
+    state: State<'_, AppState>,
+    items: Vec<CheckCacheInput>,
+) -> Result<Vec<CheckCacheResult>, CommandError> {
+    let service = &state.thumbnail_service;
+    let results: Vec<CheckCacheResult> = items
+        .into_iter()
+        .map(|input| {
+            let size = input
+                .size
+                .as_deref()
+                .and_then(ThumbnailSize::from_str)
+                .unwrap_or(ThumbnailSize::Small);
+            let cached = service.is_cached(&input.file_hash, size);
+            let path = if cached {
+                Some(service.get_cache_path(&input.file_hash, size).to_string_lossy().to_string())
+            } else {
+                None
+            };
+            CheckCacheResult {
+                file_hash: input.file_hash,
+                size: size.name().to_string(),
+                cached,
+                path,
+            }
+        })
+        .collect();
+    Ok(results)
+}
+
+// ============ 工具函数 ============
+
 /// 判断文件是否为 RAW 格式
-fn is_raw_file(path: &str) -> bool {
+pub fn is_raw_file(path: &str) -> bool {
     let path = std::path::Path::new(path);
     if let Some(ext) = path.extension() {
         let ext = ext.to_string_lossy().to_lowercase();
@@ -55,6 +165,24 @@ pub async fn generate_thumbnail(
         .unwrap_or(ThumbnailSize::Medium);
 
     // 根据文件类型选择不同的 limiter：RAW 和普通格式隔离，避免 RAW 慢任务堵塞队列
+    // Fast path: cache hit should return immediately.
+    //
+    // Otherwise cached thumbnails still need to wait for the limiter + spawn_blocking scheduling,
+    // which makes "already generated" thumbnails feel slow when some other thumbnails are being
+    // generated at the same time.
+    let cache_path = state.thumbnail_service.get_cache_path(&file_hash, size);
+    if cache_path.exists() {
+        CACHE_HITS.fetch_add(1, Ordering::Relaxed);
+        return Ok(ThumbnailResponse {
+            path: cache_path.to_string_lossy().to_string(),
+            hit_cache: true,
+            generation_time_ms: None,
+        });
+    }
+
+    // 缓存未命中
+    CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
+
     let is_raw = is_raw_file(&source_path);
     let limiter = if is_raw {
         state.thumbnail_limiter_raw.clone()
@@ -74,6 +202,12 @@ pub async fn generate_thumbnail(
     })
     .await
     .map_err(|e| CommandError::from(AppError::General(e.to_string())))??;
+
+    // 累加生成时间统计
+    if let Some(gen_time) = result.generation_time_ms {
+        TOTAL_GEN_TIME_MS.fetch_add(gen_time, Ordering::Relaxed);
+        GEN_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
 
     Ok(ThumbnailResponse {
         path: result.path.to_string_lossy().to_string(),
@@ -198,6 +332,107 @@ pub fn get_libraw_status() -> LibrawStatus {
     LibrawStatus {
         available: crate::services::libraw::is_available(),
     }
+}
+
+// ============ 暖缓存 ============
+
+/// 暖缓存策略
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WarmCacheStrategy {
+    /// 最近 N 张照片
+    Recent,
+    /// 首屏分页的照片
+    FirstPage,
+}
+
+/// 暖缓存结果
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WarmCacheResult {
+    /// 入队的任务数量
+    pub queued: usize,
+    /// 已有缓存的数量
+    pub already_cached: usize,
+}
+
+/// 启动暖缓存：预生成最可能被看到的缩略图
+///
+/// - strategy: 暖缓存策略
+/// - limit: 最多处理的照片数量
+#[tauri::command]
+pub async fn warm_thumbnail_cache(
+    state: State<'_, AppState>,
+    strategy: WarmCacheStrategy,
+    limit: Option<usize>,
+) -> Result<WarmCacheResult, CommandError> {
+    use crate::models::{PaginationParams, PhotoSortOptions, PhotoSortField, SortOrder};
+    use std::path::PathBuf;
+
+    let limit = limit.unwrap_or(100).min(500) as u32; // 最多 500 张
+    let db = state.db.clone();
+    let queue = state.thumbnail_queue.clone();
+    let service = state.thumbnail_service.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        // 根据策略获取照片
+        let pagination = PaginationParams { page: 1, page_size: limit };
+        let sort = match strategy {
+            WarmCacheStrategy::Recent => PhotoSortOptions {
+                field: PhotoSortField::DateTaken,
+                order: SortOrder::Desc,
+            },
+            WarmCacheStrategy::FirstPage => PhotoSortOptions::default(),
+        };
+
+        let photos = db.get_photos(&pagination, &sort)
+            .map_err(|e| CommandError::from(e))?
+            .items;
+
+        let mut queued = 0usize;
+        let mut already_cached = 0usize;
+        let mut tasks = Vec::with_capacity(photos.len() * 2);
+
+        for photo in photos {
+            let path = PathBuf::from(&photo.file_path);
+
+            // 检查 tiny 是否已缓存
+            if service.is_cached(&photo.file_hash, ThumbnailSize::Tiny) {
+                already_cached += 1;
+            } else {
+                tasks.push(ThumbnailTask::new(
+                    path.clone(),
+                    photo.file_hash.clone(),
+                    ThumbnailSize::Tiny,
+                    10, // 暖缓存优先级略高于普通预生成
+                ));
+                queued += 1;
+            }
+
+            // 检查 small 是否已缓存
+            if service.is_cached(&photo.file_hash, ThumbnailSize::Small) {
+                already_cached += 1;
+            } else {
+                tasks.push(ThumbnailTask::new(
+                    path,
+                    photo.file_hash,
+                    ThumbnailSize::Small,
+                    10,
+                ));
+                queued += 1;
+            }
+        }
+
+        if !tasks.is_empty() {
+            queue.enqueue_batch(tasks);
+        }
+
+        Ok::<WarmCacheResult, CommandError>(WarmCacheResult { queued, already_cached })
+    })
+    .await
+    .map_err(|e| CommandError::from(AppError::General(e.to_string())))??;
+
+    Ok(result)
 }
 
 #[cfg(test)]

@@ -4,7 +4,8 @@ import type { MouseEvent, CSSProperties } from 'react';
 import { VirtuosoGrid, type ContextProp, type GridComponents, type GridItemProps, type GridListProps, type ScrollerProps, type VirtuosoGridHandle, type ListRange } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
-import { enqueueThumbnails, isThumbnailCached } from '@/hooks';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { enqueueThumbnails, isThumbnailCached, checkThumbnailsCached, addToCacheExternal, type ThumbnailSize } from '@/hooks';
 import type { Photo } from '@/types';
 
 type PhotoGridVirtuosoContext = {
@@ -261,7 +262,7 @@ const PhotoGrid = memo(function PhotoGrid({
       if (preloadDebounceRef.current) {
         clearTimeout(preloadDebounceRef.current);
       }
-      preloadDebounceRef.current = setTimeout(() => {
+      preloadDebounceRef.current = setTimeout(async () => {
         if (photos.length === 0) return;
 
         const preloadCount = 20;
@@ -270,21 +271,46 @@ const PhotoGrid = memo(function PhotoGrid({
         const start = Math.max(0, startIndex - preloadCount);
         const end = Math.min(photos.length - 1, endIndex + preloadCount);
 
-        const tasks = photos
-          .slice(start, end + 1)
-          .filter(p => !isThumbnailCached(p.fileHash, 'small'))
-          .map((p, idx) => ({
-            sourcePath: p.filePath,
-            fileHash: p.fileHash,
-            size: 'small' as const,
-            // Higher priority for items closer to visible range center
-            priority: 50 - Math.abs(idx - (end - start) / 2),
-          }));
+        const photosToCheck = photos.slice(start, end + 1);
 
-        if (tasks.length > 0) {
-          enqueueThumbnails(tasks).catch(() => {
-            // Ignore preload errors
-          });
+        // 先过滤掉已在内存缓存中的
+        const checkItems = photosToCheck
+          .filter(p => !isThumbnailCached(p.fileHash, 'small'))
+          .map(p => ({ fileHash: p.fileHash, size: 'small' as ThumbnailSize }));
+
+        if (checkItems.length === 0) return;
+
+        try {
+          // 批量检查磁盘缓存
+          const cacheStatus = await checkThumbnailsCached(checkItems);
+
+          // 预热：已有磁盘缓存的加入内存缓存
+          for (const [key, status] of cacheStatus) {
+            if (status.cached && status.path) {
+              const [fileHash, size] = key.split('_');
+              addToCacheExternal(fileHash, size as ThumbnailSize, convertFileSrc(status.path));
+            }
+          }
+
+          // 只 enqueue 真正没缓存的
+          const tasks = photosToCheck
+            .filter(p => {
+              const status = cacheStatus.get(`${p.fileHash}_small`);
+              return status && !status.cached;
+            })
+            .map((p, idx) => ({
+              sourcePath: p.filePath,
+              fileHash: p.fileHash,
+              size: 'small' as const,
+              // Higher priority for items closer to visible range center
+              priority: 50 - Math.abs(idx - (end - start) / 2),
+            }));
+
+          if (tasks.length > 0) {
+            await enqueueThumbnails(tasks);
+          }
+        } catch {
+          // Ignore preload errors
         }
       }, 150);
     },
