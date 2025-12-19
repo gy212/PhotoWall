@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex, Condvar};
 use image::{DynamicImage, ImageFormat, imageops::FilterType, Rgb, RgbImage};
 use crate::utils::error::{AppError, AppResult};
 
+// 引入 WIC 服务
+use super::wic::WicProcessor;
+
 /// 缩略图尺寸
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThumbnailSize {
@@ -225,7 +228,7 @@ impl ThumbnailService {
         })
     }
 
-    /// 生成缩略图
+    /// 生成缩略图 (优化版: 优先使用 WIC)
     pub fn generate(
         &self,
         source_path: &Path,
@@ -237,6 +240,39 @@ impl ThumbnailService {
             return Err(AppError::FileNotFound(source_path.display().to_string()));
         }
 
+        let dim = size.dimensions();
+        let cache_path = self.get_cache_path(file_hash, size);
+        let tmp_path = cache_path.with_extension("webp.tmp");
+
+        // 尝试使用 WIC 加速加载和缩放
+        // 注意：WIC 需要 Windows 环境。如果在非 Windows 编译，需要条件编译，但目前需求明确是 Windows。
+        let wic_result = (|| -> AppResult<()> {
+            let processor = WicProcessor::new()?;
+            // 直接加载并缩放到目标尺寸
+            let (buffer, w, h) = processor.load_and_resize(source_path, dim, dim)?;
+            let img = WicProcessor::buffer_to_dynamic_image(buffer, w, h)?;
+
+            // 确保父目录存在
+            if let Some(parent) = cache_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            // 保存为 WebP
+            img.save_with_format(&tmp_path, ImageFormat::WebP)?;
+            Ok(())
+        })();
+
+        if let Ok(_) = wic_result {
+            tracing::debug!("使用 WIC 成功生成缩略图: {:?}", source_path);
+            // 原子重命名
+            fs::rename(&tmp_path, &cache_path)?;
+            return Ok(cache_path);
+        } else {
+            if let Err(e) = &wic_result {
+                tracing::warn!("WIC 生成失败，回退到 Rust Image: {}", e);
+            }
+        }
+
+        // WIC 失败或不可用，回退到原有的 Rust image crate 实现
         // 根据文件类型选择不同的加载方式
         let img = if self.is_jpeg(source_path) {
             // JPEG: 尝试快速提取 EXIF 缩略图
@@ -265,16 +301,11 @@ impl ThumbnailService {
 
         // 生成缩略图（保持宽高比）
         // 使用 Triangle 滤波器替代 Lanczos3，性能更好且网格缩略图观感差异很小
-        let dim = size.dimensions();
         let thumbnail = if img.width() == dim && img.height() == dim {
             img
         } else {
             img.resize(dim, dim, FilterType::Triangle)
         };
-
-        // 保存为 WebP 格式（原子写入：先写 .tmp 再 rename，避免并发/中断导致坏缓存）
-        let cache_path = self.get_cache_path(file_hash, size);
-        let tmp_path = cache_path.with_extension("webp.tmp");
 
         // 确保父目录存在
         if let Some(parent) = cache_path.parent() {
