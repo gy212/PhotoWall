@@ -52,6 +52,7 @@ pub async fn import_photos(
         });
     }
 
+    let paths_clone = options.paths.clone();
     let paths: Vec<PathBuf> = options.paths.into_iter().map(PathBuf::from).collect();
     let db = state.db.clone();
     let app_handle = app.clone();
@@ -85,6 +86,10 @@ pub async fn import_photos(
 
     // 发送完成事件
     let _ = app.emit("import-finished", &result);
+
+    if result.indexed > 0 {
+        crate::commands::scanner::trigger_thumbnail_pregeneration(&app, &state, &paths_clone).await;
+    }
 
     Ok(result)
 }

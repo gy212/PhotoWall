@@ -15,6 +15,7 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::Semaphore;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tauri::Manager;
 
 use commands::{
     // greet
@@ -129,27 +130,15 @@ pub fn run() {
     let database = Database::open(db_path).expect("无法打开数据库");
     database.init().expect("无法初始化数据库");
 
-    // 初始化缩略图队列
+    // 初始化缩略图服务（队列在 setup 中根据设置创建）
     let thumbnail_cache_dir = services::ThumbnailService::default_cache_dir();
     let thumbnail_service = services::ThumbnailService::new(thumbnail_cache_dir)
         .expect("无法初始化缩略图服务");
-    let thumbnail_queue = services::ThumbnailQueue::new(thumbnail_service.clone())
-        .expect("无法初始化缩略图队列");
-
-    let app_state = AppState {
-        db: Arc::new(database),
-        thumbnail_service,
-        thumbnail_queue: Arc::new(thumbnail_queue),
-        // 普通格式并发限制：适当提高到 4，因为 JPEG/PNG 解码较快
-        thumbnail_limiter: Arc::new(Semaphore::new(4)),
-        // RAW 格式并发限制：只允许 1 个，避免慢任务堵塞整个队列
-        thumbnail_limiter_raw: Arc::new(Semaphore::new(1)),
-    };
+    let db = Arc::new(database);
 
     tracing::info!("数据库初始化完成");
 
     tauri::Builder::default()
-        .manage(app_state)
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -257,9 +246,54 @@ pub fn run() {
             // logging
             log_frontend,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            let app_handle = app.handle().clone();
             // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件
-            services::thumbnail_queue::set_app_handle(app.handle().clone());
+            services::thumbnail_queue::set_app_handle(app_handle.clone());
+
+            let settings = services::SettingsManager::new(&app_handle)
+                .and_then(|manager| manager.load())
+                .unwrap_or_else(|err| {
+                    tracing::warn!("加载设置失败，使用默认设置: {}", err);
+                    crate::models::AppSettings::default()
+                });
+
+            let configured_threads = settings.performance.thumbnail_threads;
+            let cpu_threads = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4);
+            let auto_threads = ((cpu_threads + 1) / 2).clamp(1, 4);
+            let thumbnail_threads = (if configured_threads == 0 {
+                auto_threads
+            } else {
+                configured_threads
+            })
+            .max(1)
+            .min(8);
+
+            tracing::info!(
+                "缩略图线程数: {} (设置: {}, CPU: {})",
+                thumbnail_threads,
+                configured_threads,
+                cpu_threads
+            );
+
+            let thumbnail_queue = services::ThumbnailQueue::with_worker_count(
+                thumbnail_service.clone(),
+                thumbnail_threads,
+            )
+            .expect("无法初始化缩略图队列");
+
+            let app_state = AppState {
+                db: db.clone(),
+                thumbnail_service: thumbnail_service.clone(),
+                thumbnail_queue: Arc::new(thumbnail_queue),
+                thumbnail_limiter: Arc::new(Semaphore::new(thumbnail_threads)),
+                thumbnail_limiter_raw: Arc::new(Semaphore::new(1)),
+            };
+
+            app.manage(app_state);
+
             Ok(())
         })
         .run(tauri::generate_context!())

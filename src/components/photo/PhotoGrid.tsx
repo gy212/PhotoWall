@@ -141,6 +141,37 @@ const PhotoGrid = memo(function PhotoGrid({
   const [isScrolling, setIsScrolling] = useState(false);
   const virtuosoContext = useMemo<PhotoGridVirtuosoContext>(() => ({ loading }), [loading]);
   const preloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1024,
+    height: typeof window !== 'undefined' ? window.innerHeight : 768,
+  }));
+
+  const overscanPx = useMemo(
+    () => Math.round(Math.min(900, Math.max(400, thumbnailSize * 3))),
+    [thumbnailSize]
+  );
+
+  const increaseViewportBy = useMemo(
+    () => ({ top: Math.round(overscanPx * 0.5), bottom: overscanPx }),
+    [overscanPx]
+  );
+
+  const estimatedVisibleCount = useMemo(() => {
+    const availableWidth = Math.max(0, viewportSize.width - gap * 2);
+    const columns = Math.max(1, Math.floor(availableWidth / (thumbnailSize + gap)));
+    const rows = Math.max(1, Math.ceil(viewportSize.height / (thumbnailSize + gap)));
+    return columns * rows;
+  }, [gap, thumbnailSize, viewportSize.height, viewportSize.width]);
+
+  const dataPrefetchThreshold = useMemo(
+    () => Math.min(80, Math.max(40, Math.floor(estimatedVisibleCount * 0.8))),
+    [estimatedVisibleCount]
+  );
+
+  const thumbnailPreloadCount = useMemo(
+    () => Math.min(40, Math.max(12, Math.floor(estimatedVisibleCount * 0.25))),
+    [estimatedVisibleCount]
+  );
 
   // Force recalculation after mount/route change so thumbnails render without manual scroll
   useEffect(() => {
@@ -161,6 +192,19 @@ const PhotoGrid = memo(function PhotoGrid({
     });
     return () => cancelAnimationFrame(rafId);
   }, [firstPhotoId, location.key]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleResize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Cleanup preload debounce timer on unmount
   useEffect(() => {
@@ -252,7 +296,7 @@ const PhotoGrid = memo(function PhotoGrid({
       // Data prefetch logic
       if (hasMore && !loading && onLoadMore && photos.length > 0) {
         const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
-        const prefetchThreshold = 40;
+        const prefetchThreshold = dataPrefetchThreshold;
         if (endIndex >= photos.length - prefetchThreshold) {
           onLoadMore();
         }
@@ -265,7 +309,7 @@ const PhotoGrid = memo(function PhotoGrid({
       preloadDebounceRef.current = setTimeout(async () => {
         if (photos.length === 0) return;
 
-        const preloadCount = 20;
+        const preloadCount = thumbnailPreloadCount;
         const startIndex = typeof range?.startIndex === 'number' ? range.startIndex : 0;
         const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
         const start = Math.max(0, startIndex - preloadCount);
@@ -314,7 +358,7 @@ const PhotoGrid = memo(function PhotoGrid({
         }
       }, 150);
     },
-    [hasMore, loading, onLoadMore, photos]
+    [dataPrefetchThreshold, hasMore, loading, onLoadMore, photos, thumbnailPreloadCount]
   );
 
   // 空状态
@@ -355,8 +399,8 @@ const PhotoGrid = memo(function PhotoGrid({
         context={virtuosoContext}
         computeItemKey={computeItemKey}
         initialItemCount={Math.min(photos.length, 50)}
-        overscan={800}
-        increaseViewportBy={{ top: 400, bottom: 800 }}
+        overscan={overscanPx}
+        increaseViewportBy={increaseViewportBy}
         isScrolling={setIsScrolling}
         listClassName={clsx('photo-grid-list', isScrolling && 'pointer-events-none')}
         itemClassName="photo-grid-item"

@@ -286,3 +286,168 @@ export async function getThumbnailStats(): Promise<ThumbnailStats> {
 
 // Legacy exports for compatibility
 export const useThumbnailWithEvents = useThumbnail;
+// ============ 事件驱动加载 ============
+
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
+/** thumbnail-ready 事件的 payload */
+export interface ThumbnailReadyPayload {
+  fileHash: string;
+  size: string;
+  path: string;
+}
+
+/**
+ * 事件驱动的缩略图加载 Hook
+ *
+ * 与 useThumbnail 不同，这个 hook 不使用轮询，而是：
+ * 1. 先查内存缓存
+ * 2. 再查磁盘缓存
+ * 3. 不存在则 enqueue 并监听 thumbnail-ready 事件
+ *
+ * 优势：
+ * - 彻底去掉轮询
+ * - 减少 IPC 调用
+ * - 更精确的 UI 更新时机
+ *
+ * @param sourcePath 源图片路径
+ * @param fileHash 文件哈希
+ * @param options 选项
+ */
+export function useThumbnailWithEvents(
+  sourcePath: string,
+  fileHash: string,
+  options: ThumbnailOptions = {},
+): UseThumbnailResult {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ���意只依赖具体属性值
+  const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [
+    options.size,
+    options.priority,
+    options.enabled,
+    options.loadDelay,
+  ]);
+
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+
+  const mountedRef = useRef(true);
+  const unlistenRef = useRef<UnlistenFn | null>(null);
+  const runtimeAvailable = detectTauriRuntime();
+  const thumbnailEnabled = opts.enabled && runtimeAvailable;
+
+  const cancel = useCallback(() => {
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
+    }
+    if (thumbnailEnabled) {
+      invoke('cancel_thumbnail', { fileHash }).catch(() => {});
+    }
+  }, [fileHash, thumbnailEnabled]);
+
+  const reload = useCallback(() => {
+    setReloadTrigger(prev => prev + 1);
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    // 1. 先查内存缓存
+    const cached = getFromCache(fileHash, opts.size);
+    if (cached) {
+      touchCache(fileHash, opts.size);
+      setThumbnailUrl(cached);
+      setIsLoading(false);
+      return () => { mountedRef.current = false; };
+    }
+
+    if (!thumbnailEnabled) {
+      setThumbnailUrl(null);
+      setIsLoading(false);
+      return () => { mountedRef.current = false; };
+    }
+
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const startLoad = () => {
+      setIsLoading(true);
+
+    // 2. 查磁盘缓存
+    invoke<string | null>('get_thumbnail_cache_path', {
+      fileHash,
+      size: opts.size,
+    }).then(async (path) => {
+      if (!mountedRef.current) return;
+
+      if (path) {
+        // 磁盘缓存命中
+        const url = convertFileSrc(path);
+        addToCache(fileHash, opts.size, url);
+        setThumbnailUrl(url);
+        setIsLoading(false);
+      } else {
+        // 3. 不存在则 enqueue 并监听事件
+        await invoke('enqueue_thumbnail', {
+          sourcePath,
+          fileHash,
+          size: opts.size,
+          priority: opts.priority,
+        });
+
+        // 监听 thumbnail-ready 事件
+        unlistenRef.current = await listen<ThumbnailReadyPayload>('thumbnail-ready', (event) => {
+          if (!mountedRef.current) return;
+
+          if (event.payload.fileHash === fileHash && event.payload.size === opts.size) {
+            const url = convertFileSrc(event.payload.path);
+            addToCache(fileHash, opts.size, url);
+            setThumbnailUrl(url);
+            setIsLoading(false);
+
+            // 收到事件后取消监听
+            if (unlistenRef.current) {
+              unlistenRef.current();
+              unlistenRef.current = null;
+            }
+          }
+        });
+      }
+    }).catch((err) => {
+      if (!mountedRef.current) return;
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setIsLoading(false);
+    });
+    };
+
+    if (opts.loadDelay > 0) {
+      delayTimer = setTimeout(startLoad, opts.loadDelay);
+    } else {
+      startLoad();
+    }
+
+    return () => {
+      mountedRef.current = false;
+      if (delayTimer) {
+        clearTimeout(delayTimer);
+      }
+      if (unlistenRef.current) {
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+    };
+  }, [sourcePath, fileHash, opts.size, opts.priority, opts.loadDelay, reloadTrigger, thumbnailEnabled]);
+
+  return useMemo(
+    () => ({
+      thumbnailUrl,
+      isLoading,
+      error,
+      reload,
+      cancel,
+    }),
+    [thumbnailUrl, isLoading, error, reload, cancel]
+  );
+}
