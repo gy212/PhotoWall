@@ -534,6 +534,7 @@ export function useThumbnailWithEvents(
     options.size,
     options.priority,
     options.enabled,
+    options.loadDelay,
   ]);
 
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -579,7 +580,10 @@ export function useThumbnailWithEvents(
       return () => { mountedRef.current = false; };
     }
 
-    setIsLoading(true);
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const startLoad = () => {
+      setIsLoading(true);
 
     // 2. 查磁盘缓存
     invoke<string | null>('get_thumbnail_cache_path', {
@@ -626,15 +630,25 @@ export function useThumbnailWithEvents(
       setError(err instanceof Error ? err : new Error(String(err)));
       setIsLoading(false);
     });
+    };
+
+    if (opts.loadDelay > 0) {
+      delayTimer = setTimeout(startLoad, opts.loadDelay);
+    } else {
+      startLoad();
+    }
 
     return () => {
       mountedRef.current = false;
+      if (delayTimer) {
+        clearTimeout(delayTimer);
+      }
       if (unlistenRef.current) {
         unlistenRef.current();
         unlistenRef.current = null;
       }
     };
-  }, [sourcePath, fileHash, opts.size, opts.priority, reloadTrigger, thumbnailEnabled]);
+  }, [sourcePath, fileHash, opts.size, opts.priority, opts.loadDelay, reloadTrigger, thumbnailEnabled]);
 
   return useMemo(
     () => ({

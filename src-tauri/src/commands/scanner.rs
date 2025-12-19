@@ -353,7 +353,7 @@ struct ThumbnailPregenerateProgress {
 }
 
 /// 触发后台预生成缩略图
-async fn trigger_thumbnail_pregeneration(
+pub(crate) async fn trigger_thumbnail_pregeneration(
     app: &AppHandle,
     state: &State<'_, AppState>,
     folder_paths: &[String],

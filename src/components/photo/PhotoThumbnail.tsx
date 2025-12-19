@@ -1,10 +1,8 @@
 import { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import clsx from 'clsx';
-import { getAssetUrl } from '@/services/api';
 import type { Photo } from '@/types';
 import { useThumbnailProgressive } from '@/hooks';
-import type { ThumbnailSize } from '@/hooks';
 
 interface PhotoThumbnailProps {
   /** 照片数据 */
@@ -33,26 +31,6 @@ const detectTauriRuntime = () => {
   return Boolean(tauriWindow.__TAURI__ ?? tauriWindow.__TAURI_INTERNALS__);
 };
 
-/** 完整缩略图尺寸（不包括 tiny） */
-type FullThumbnailSize = Exclude<ThumbnailSize, 'tiny'>;
-
-/**
- * 根据显示尺寸和设备像素比计算最优缩略图尺寸
- * 适配高分辨率屏幕（如 Retina 显示器）
- */
-const resolveThumbnailSize = (pixelSize: number): FullThumbnailSize => {
-  // 获取设备像素比，高分辨率屏幕需要更大的缩略图
-  const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
-  // 实际需要的像素尺寸 = 显示尺寸 × 设备像素比
-  const actualPixelSize = pixelSize * dpr;
-
-  // 后端缩略图尺寸: small=300, medium=500, large=800
-  // 降低阈值以确保有足够的清晰度余量，避免边界情况导致模糊
-  if (actualPixelSize <= 200) return 'small';
-  if (actualPixelSize <= 400) return 'medium';
-  return 'large';
-};
-
 const PhotoThumbnail = memo(function PhotoThumbnail({
   photo,
   size = 200,
@@ -69,9 +47,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   const isTauriRuntime = useMemo(() => detectTauriRuntime(), []);
   const targetThumbnailSize = useMemo(() => {
     // 列表/网格页优先保证流畅性，避免触发后端更重的 large 路径
-    const resolved = resolveThumbnailSize(size);
-    return resolved === 'large' ? 'medium' : resolved;
-  }, [size]);
+    return 'small' as const;
+  }, []);
 
   // 使用渐进式加载：先加载 tiny 模糊占位图，再加载完整缩略图
   const { tinyUrl, fullUrl, isLoadingFull, showTiny, error: thumbnailError } = useThumbnailProgressive(
@@ -86,17 +63,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     }
   );
 
-  const fallbackAssetUrl = useMemo(() => {
-    if (!isTauriRuntime) return null;
-    try {
-      return getAssetUrl(photo.filePath);
-    } catch {
-      return null;
-    }
-  }, [photo.filePath, isTauriRuntime]);
-
   // 完整图片 URL（优先使用缩略图，回退到原图）
-  const fullImageUrl = isTauriRuntime ? (fullUrl ?? fallbackAssetUrl) : fallbackAssetUrl;
+  const fullImageUrl = fullUrl;
 
   useEffect(() => {
     setTinyLoaded(false);
@@ -147,8 +115,12 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
 
   const hasError = isTauriRuntime ? Boolean(thumbnailError) || localError : localError;
   const isLoading = isTauriRuntime
-    ? isLoadingFull || (!fullUrl && !thumbnailError && !tinyUrl) || (!fullLoaded && !hasError && Boolean(fullImageUrl) && !showTiny)
-    : !fullLoaded && !hasError && Boolean(fullImageUrl);
+    ? !hasError &&
+      !showTiny &&
+      (isLoadingFull ||
+        (!fullUrl && !thumbnailError && !tinyUrl) ||
+        (Boolean(fullImageUrl) && !fullLoaded))
+    : false;
 
   return (
     <div
