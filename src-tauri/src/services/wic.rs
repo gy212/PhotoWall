@@ -6,8 +6,10 @@ use std::path::Path;
 use windows::{
     core::*,
     Win32::System::Com::*,
-    Win32::Graphics::Imaging::*
+    Win32::Graphics::Imaging::*,
 };
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::GENERIC_ACCESS_RIGHTS;
 use crate::utils::error::{AppError, AppResult};
 #[cfg(target_os = "windows")]
 use image::DynamicImage;
@@ -58,7 +60,7 @@ impl WicProcessor {
             let decoder = self.factory.CreateDecoderFromFilename(
                 PCWSTR(path_wide.as_ptr()),
                 None,
-                GENERIC_READ,
+                GENERIC_ACCESS_RIGHTS(0x80000000), // GENERIC_READ
                 WICDecodeMetadataCacheOnDemand,
             ).map_err(|e| AppError::General(format!("WIC Decoder Error: {}", e)))?;
 
@@ -67,7 +69,9 @@ impl WicProcessor {
                 .map_err(|e| AppError::General(format!("WIC GetFrame Error: {}", e)))?;
 
             // Get original size
-            let (orig_w, orig_h) = frame.GetSize()
+            let mut orig_w: u32 = 0;
+            let mut orig_h: u32 = 0;
+            frame.GetSize(&mut orig_w, &mut orig_h)
                 .map_err(|_| AppError::General("Failed to get frame size".into()))?;
 
             // Calculate scaling to maintain aspect ratio
@@ -105,7 +109,8 @@ impl WicProcessor {
             let buffer_size = (stride * new_h) as usize;
             let mut buffer = vec![0u8; buffer_size];
 
-            converter.CopyPixels(None, stride, &mut buffer)?;
+            converter.CopyPixels(std::ptr::null(), stride, &mut buffer)
+                .map_err(|e| AppError::General(format!("CopyPixels Error: {}", e)))?;
 
             Ok((buffer, new_w, new_h))
         }

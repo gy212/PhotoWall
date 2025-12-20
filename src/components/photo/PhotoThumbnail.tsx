@@ -125,8 +125,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   return (
     <div
       className={clsx(
-        'group relative cursor-pointer overflow-hidden rounded-2xl bg-[#ecf0f3] box-border',
-        selected && 'ring-[4px] ring-[#3b82f6] ring-inset'
+        'group relative cursor-pointer overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 box-border',
       )}
       style={{ width: size, height: size }}
       onClick={handleClick}
@@ -143,7 +142,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={tinyUrl}
           alt=""
           className={clsx(
-            'absolute inset-0 h-full w-full object-cover rounded-2xl transition-opacity duration-200',
+            'absolute inset-0 h-full w-full object-cover rounded-xl transition-opacity duration-200',
             'blur-sm scale-105', // 模糊并略微放大以隐藏像素化
             tinyLoaded ? 'opacity-100' : 'opacity-0'
           )}
@@ -157,7 +156,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={fullImageUrl}
           alt={photo.fileName}
           className={clsx(
-            'block h-full w-full object-cover rounded-2xl transition-opacity duration-200',
+            'block h-full w-full object-cover rounded-xl transition-opacity duration-200',
             fullLoaded ? 'opacity-100' : 'opacity-0'
           )}
           onLoad={handleFullLoad}
@@ -166,7 +165,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         />
       )}
       {hasError && (
-        <div className="flex h-full w-full flex-col items-center justify-center bg-[#ecf0f3] text-gray-400">
+        <div className="flex h-full w-full flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400">
           <svg className="h-8 w-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -178,6 +177,14 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         <div className="absolute inset-0 animate-pulse bg-gray-200" />
       )}
 
+      {/* 选中遮罩层 */}
+      <div
+        className={clsx(
+          'absolute inset-0 transition-all duration-200 pointer-events-none',
+          selected ? 'bg-primary/20 ring-4 ring-primary ring-inset' : 'bg-transparent group-hover:bg-black/5'
+        )}
+      />
+
       <div
         className={clsx(
           'absolute top-3 left-3 z-10 transition-[transform,opacity] duration-200',
@@ -187,14 +194,16 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       >
         <div
           className={clsx(
-            'flex h-6 w-6 items-center justify-center rounded-lg transition-colors shadow-md',
-            selected ? 'bg-[#3b82f6] text-white' : 'bg-white/80 text-gray-400 hover:bg-white hover:text-[#3b82f6]'
+            'flex h-6 w-6 items-center justify-center rounded-full transition-all shadow-sm ring-1 ring-black/5',
+            selected 
+              ? 'bg-primary text-white scale-110 ring-primary' 
+              : 'bg-white/90 text-gray-400 hover:bg-white hover:text-primary hover:scale-110'
           )}
         >
-          {selected && (
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
+          {selected ? (
+            <span className="material-symbols-outlined text-base font-bold">check</span>
+          ) : (
+             <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 group-hover:border-primary/60" />
           )}
         </div>
       </div>

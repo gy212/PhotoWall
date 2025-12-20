@@ -71,13 +71,14 @@ struct RawPreviewWorker {
     tx: std::sync::mpsc::SyncSender<RawPreviewJob>,
 }
 
-/// RAW 预览提取并发工作线程数
-const RAW_WORKER_COUNT: usize = 2;
+/// RAW 预览提取并发工作线程数（增加到 4 个以提高并发处理能力）
+const RAW_WORKER_COUNT: usize = 4;
 
 impl RawPreviewWorker {
     fn global() -> &'static Self {
         static RAW_PREVIEW_WORKER: OnceLock<RawPreviewWorker> = OnceLock::new();
-        RAW_PREVIEW_WORKER.get_or_init(|| Self::new(8, RAW_WORKER_COUNT))
+        // 队列容量增加到 32，减少"队列满跳过"的情况
+        RAW_PREVIEW_WORKER.get_or_init(|| Self::new(32, RAW_WORKER_COUNT))
     }
 
     fn new(queue_capacity: usize, worker_count: usize) -> Self {

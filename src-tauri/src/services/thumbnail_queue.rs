@@ -19,6 +19,11 @@ pub struct ThumbnailReadyPayload {
     pub file_hash: String,
     pub size: String,
     pub path: String,
+    /// 是否为占位图（RAW 提取失败时生成，不缓存到磁盘）
+    pub is_placeholder: bool,
+    /// 占位图 Base64 编码（WebP 格式，仅占位图时有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder_base64: Option<String>,
 }
 
 /// 全局 AppHandle 存储（用于 worker 线程发送事件）
@@ -32,13 +37,25 @@ pub fn set_app_handle(handle: AppHandle) {
 }
 
 /// 发送 thumbnail-ready 事件
-fn emit_thumbnail_ready(file_hash: &str, size: ThumbnailSize, path: &str) {
+fn emit_thumbnail_ready(
+    file_hash: &str,
+    size: ThumbnailSize,
+    path: &str,
+    is_placeholder: bool,
+    placeholder_bytes: Option<&[u8]>,
+) {
     if let Ok(guard) = APP_HANDLE.read() {
         if let Some(ref handle) = *guard {
+            let placeholder_base64 = placeholder_bytes.map(|bytes| {
+                use base64::{Engine as _, engine::general_purpose::STANDARD};
+                STANDARD.encode(bytes)
+            });
             let payload = ThumbnailReadyPayload {
                 file_hash: file_hash.to_string(),
                 size: size.name().to_string(),
                 path: path.to_string(),
+                is_placeholder,
+                placeholder_base64,
             };
             let _ = handle.emit("thumbnail-ready", payload);
         }
@@ -181,6 +198,8 @@ impl ThumbnailQueue {
                                 &task.file_hash,
                                 task.size,
                                 &result.path.to_string_lossy(),
+                                result.is_placeholder,
+                                result.placeholder_bytes.as_deref(),
                             );
                         }
                         Err(e) => {

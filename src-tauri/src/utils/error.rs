@@ -43,6 +43,10 @@ pub enum AppError {
     /// 通用错误
     #[error("{0}")]
     General(String),
+
+    /// 占位图生成（RAW 提取失败时，返回占位图字节而不缓存）
+    #[error("占位图已生成")]
+    PlaceholderGenerated(Vec<u8>),
 }
 
 /// 用于 Tauri 命令返回的错误包装
@@ -64,6 +68,7 @@ impl From<AppError> for CommandError {
             AppError::Permission(_) => "E_PERMISSION",
             AppError::Config(_) => "E_CONFIG",
             AppError::General(_) => "E_GENERAL",
+            AppError::PlaceholderGenerated(_) => "E_PLACEHOLDER",
         };
 
         CommandError {

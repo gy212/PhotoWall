@@ -504,6 +504,37 @@ export function getAssetUrl(filePath: string): string {
 }
 
 /**
+ * RAW 预览响应
+ */
+export interface RawPreviewResponse {
+  /** Base64 编码的 JPEG 数据 */
+  data: string;
+  /** 图像宽度 */
+  width: number;
+  /** 图像高度 */
+  height: number;
+}
+
+/**
+ * 获取 RAW 图像的预览
+ */
+export async function getRawPreview(sourcePath: string): Promise<RawPreviewResponse> {
+  return invoke<RawPreviewResponse>('get_raw_preview', { sourcePath });
+}
+
+/**
+ * 判断文件是否为 RAW 格式
+ */
+export function isRawFile(filePath: string): boolean {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  return [
+    'dng', 'cr2', 'cr3', 'nef', 'nrw', 'arw', 'srf', 'sr2',
+    'orf', 'raf', 'rw2', 'pef', 'srw', 'raw', 'rwl', '3fr',
+    'erf', 'kdc', 'dcr', 'x3f'
+  ].includes(ext);
+}
+
+/**
  * 获取缩略图路径
  * 缩略图存储在 %AppData%/PhotoWall/Thumbnails/{size}/{hash}.webp
  */

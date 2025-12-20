@@ -19,12 +19,17 @@ static GEN_COUNT: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResponse {
-    /// 生成的缩略图在磁盘上的绝对路径（WebP）
+    /// 生成的缩略图在磁盘上的绝对路径（WebP，占位图时为空字符串）
     pub path: String,
     /// 是否命中缓存
     pub hit_cache: bool,
     /// 本次生成耗时（毫秒，命中缓存时为 null）
     pub generation_time_ms: Option<u64>,
+    /// 是否为占位图（RAW 提取失败时生成，不缓存到磁盘）
+    pub is_placeholder: bool,
+    /// 占位图 Base64 编码（WebP 格式，仅占位图时有值）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder_base64: Option<String>,
 }
 
 // ============ 统计相关结构体和命令 ============
@@ -177,6 +182,8 @@ pub async fn generate_thumbnail(
             path: cache_path.to_string_lossy().to_string(),
             hit_cache: true,
             generation_time_ms: None,
+            is_placeholder: false,
+            placeholder_base64: None,
         });
     }
 
@@ -209,10 +216,18 @@ pub async fn generate_thumbnail(
         GEN_COUNT.fetch_add(1, Ordering::Relaxed);
     }
 
+    // 处理占位图：将字节转换为 Base64
+    let placeholder_base64 = result.placeholder_bytes.as_ref().map(|bytes| {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        STANDARD.encode(bytes)
+    });
+
     Ok(ThumbnailResponse {
         path: result.path.to_string_lossy().to_string(),
         hit_cache: result.hit_cache,
         generation_time_ms: result.generation_time_ms,
+        is_placeholder: result.is_placeholder,
+        placeholder_base64,
     })
 }
 
@@ -332,6 +347,92 @@ pub fn get_libraw_status() -> LibrawStatus {
     LibrawStatus {
         available: crate::services::libraw::is_available(),
     }
+}
+
+/// RAW 预览响应
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RawPreviewResponse {
+    /// Base64 编码的 JPEG 数据
+    pub data: String,
+    /// 图像宽度
+    pub width: u32,
+    /// 图像高度
+    pub height: u32,
+}
+
+/// 获取 RAW 图像的预览（用于查看器显示）
+///
+/// 使用多策略提取高分辨率预览：
+/// 1. LibRaw 提取嵌入预览（如果分辨率足够）
+/// 2. 扫描嵌入的大尺寸 JPEG
+/// 3. RAW 硬解码（全分辨率）
+#[tauri::command]
+pub async fn get_raw_preview(
+    source_path: String,
+    state: State<'_, AppState>,
+) -> Result<RawPreviewResponse, CommandError> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use image::codecs::jpeg::JpegEncoder;
+
+    let path = PathBuf::from(&source_path);
+    let service = state.thumbnail_service.clone();
+
+    // 在阻塞线程中提取预览
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        // 策略 1: LibRaw 提取嵌入预览
+        if crate::services::libraw::is_available() {
+            if let Some(img) = crate::services::libraw::extract_preview_image_with_timeout(&path, 10000) {
+                // 检查分辨率是否足够（至少 1920px）
+                if img.width() >= 1920 || img.height() >= 1920 {
+                    tracing::debug!("LibRaw 提取到高分辨率预览: {}x{}", img.width(), img.height());
+                    return Some(img);
+                }
+                tracing::debug!("LibRaw 预览分辨率不足: {}x{}, 尝试其他方法", img.width(), img.height());
+            }
+        }
+
+        // 策略 2: 扫描嵌入的大尺寸 JPEG
+        if let Some(img) = service.scan_embedded_jpeg_limited(&path, 64 * 1024 * 1024, 100 * 1024) {
+            if img.width() >= 1920 || img.height() >= 1920 {
+                tracing::debug!("扫描到高分辨率嵌入 JPEG: {}x{}", img.width(), img.height());
+                return Some(img);
+            }
+        }
+
+        // 策略 3: RAW 硬解码（全分辨率）
+        if let Some(img) = service.decode_raw_image(&path) {
+            tracing::debug!("RAW 硬解码成功: {}x{}", img.width(), img.height());
+            return Some(img);
+        }
+
+        None
+    })
+    .await
+    .map_err(|e| CommandError::from(AppError::General(e.to_string())))?;
+
+    let img = result.ok_or_else(|| {
+        CommandError::from(AppError::General("无法提取 RAW 预览图".into()))
+    })?;
+
+    let width = img.width();
+    let height = img.height();
+
+    // 编码为高质量 JPEG (质量 92)
+    let mut jpeg_data = Vec::new();
+    {
+        let mut encoder = JpegEncoder::new_with_quality(&mut jpeg_data, 92);
+        encoder.encode_image(&img)
+            .map_err(|e| CommandError::from(AppError::General(format!("JPEG 编码失败: {}", e))))?;
+    }
+
+    tracing::info!("RAW 预览生成完成: {}x{}, {} bytes", width, height, jpeg_data.len());
+
+    Ok(RawPreviewResponse {
+        data: STANDARD.encode(&jpeg_data),
+        width,
+        height,
+    })
 }
 
 // ============ 暖缓存 ============

@@ -1,8 +1,8 @@
-import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
+import React, { memo, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { format } from 'date-fns';
-import { getAssetUrl, setPhotoRating, setPhotoFavorite } from '@/services/api';
+import { getAssetUrl, setPhotoRating, setPhotoFavorite, getRawPreview, isRawFile } from '@/services/api';
 import { useThumbnail } from '@/hooks/useThumbnail';
 import type { Photo } from '@/types';
 
@@ -44,16 +44,18 @@ const PhotoViewer = memo(function PhotoViewer({
   
   // 渐进式加载状态
   const [isFullLoaded, setIsFullLoaded] = useState(false);
-  const [isFullLoading, setIsFullLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const fullImageRef = useRef<HTMLImageElement | null>(null);
-  
+  const [rawPreviewUrl, setRawPreviewUrl] = useState<string | null>(null);
+
   // 获取缩略图作为占位图
   const { thumbnailUrl: placeholderUrl } = useThumbnail(
     localPhoto.filePath,
     localPhoto.fileHash,
     { size: 'large', enabled: open }
   );
+
+  // 检测是否为 RAW 格式
+  const isRaw = isRawFile(localPhoto.filePath);
 
   // 同步外部 photo 变化
   useEffect(() => {
@@ -62,35 +64,48 @@ const PhotoViewer = memo(function PhotoViewer({
     setPosition({ x: 0, y: 0 });
     // 重置加载状态
     setIsFullLoaded(false);
-    setIsFullLoading(false);
     setLoadError(false);
+    setRawPreviewUrl(null);
   }, [photo]);
 
-  // 加载原图
+  // RAW 图像加载预览
   useEffect(() => {
-    if (!open || isFullLoaded || isFullLoading) return;
-    
-    setIsFullLoading(true);
-    const img = new Image();
-    fullImageRef.current = img;
-    
-    img.onload = () => {
-      setIsFullLoaded(true);
-      setIsFullLoading(false);
-    };
-    
-    img.onerror = () => {
-      setLoadError(true);
-      setIsFullLoading(false);
-    };
-    
-    img.src = getAssetUrl(localPhoto.filePath);
-    
+    if (!open || !isRaw || rawPreviewUrl) return;
+
+    let cancelled = false;
+    getRawPreview(localPhoto.filePath)
+      .then((response) => {
+        if (!cancelled) {
+          setRawPreviewUrl(`data:image/jpeg;base64,${response.data}`);
+          setIsFullLoaded(true);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('RAW 预览加载失败:', err);
+          setLoadError(true);
+        }
+      });
+
     return () => {
-      img.onload = null;
-      img.onerror = null;
+      cancelled = true;
     };
-  }, [open, localPhoto.filePath, isFullLoaded, isFullLoading]);
+  }, [open, isRaw, localPhoto.filePath, rawPreviewUrl]);
+
+  // 原图加载完成回调
+  const handleFullImageLoad = useCallback(() => {
+    setIsFullLoaded(true);
+    setLoadError(false);
+  }, []);
+
+  // 原图加载失败回调
+  const handleFullImageError = useCallback(() => {
+    setLoadError(true);
+  }, []);
+
+  // 原图URL（RAW 使用预览，其他格式直接加载）
+  const fullImageUrl = isRaw ? rawPreviewUrl : (open ? getAssetUrl(localPhoto.filePath) : '');
+  const isFullLoading = open && !isFullLoaded && !loadError;
 
   // 获取当前照片索引
   const currentIndex = photos.findIndex((p) => p.photoId === localPhoto.photoId);
@@ -508,18 +523,23 @@ const PhotoViewer = memo(function PhotoViewer({
           />
         )}
         
-        {/* 原图 (isFullLoaded 为 true 时显示) */}
-        {isFullLoaded && (
+        {/* 原图 - 始终渲染，通过 opacity 控制显示 */}
+        {fullImageUrl && (
           <img
-            src={getAssetUrl(localPhoto.filePath)}
+            src={fullImageUrl}
             alt={localPhoto.fileName}
-            className="max-h-full max-w-full object-contain select-none animate-in fade-in duration-300"
+            className={clsx(
+              'max-h-full max-w-full object-contain select-none transition-opacity duration-300',
+              isFullLoaded ? 'opacity-100' : 'opacity-0 absolute'
+            )}
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
               transition: isDragging ? 'none' : 'transform 0.2s',
             }}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={handleMouseDown}
+            onLoad={handleFullImageLoad}
+            onError={handleFullImageError}
             draggable={false}
           />
         )}

@@ -5,6 +5,10 @@ export interface ThumbnailReadyPayload {
   fileHash: string;
   size: string;
   path: string;
+  /** 是否为占位图（RAW 提取失败时生成，不缓存到磁盘） */
+  isPlaceholder: boolean;
+  /** 占位图 Base64 编码（WebP 格式，仅占位图时有值） */
+  placeholderBase64?: string;
 }
 
 type ThumbnailListener = (url: string) => void;
@@ -25,12 +29,20 @@ class ThumbnailStore {
 
     try {
       this.unlistenFunction = await listen<ThumbnailReadyPayload>('thumbnail-ready', (event) => {
-        const { fileHash, size, path } = event.payload;
+        const { fileHash, size, path, isPlaceholder, placeholderBase64 } = event.payload;
         const key = this.getCacheKey(fileHash, size);
-        const url = convertFileSrc(path);
 
-        // Update cache
-        this.cache.set(key, url);
+        let url: string;
+        if (isPlaceholder && placeholderBase64) {
+          // 占位图：使用 data URL，不添加到持久缓存
+          url = `data:image/webp;base64,${placeholderBase64}`;
+          // 注意：占位图不添加到缓存，只通知监听器
+          // 下次请求时会重试提取
+        } else {
+          // 正常缩略图：转换文件路径并添加到缓存
+          url = convertFileSrc(path);
+          this.cache.set(key, url);
+        }
 
         // Notify listeners
         const keyListeners = this.listeners.get(key);

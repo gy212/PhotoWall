@@ -12,6 +12,7 @@ interface TimelineViewProps {
   photos: Photo[];
   thumbnailSize?: number;
   gap?: number;
+  selectedIds?: Set<number>;
   hasMore?: boolean;
   loading?: boolean;
   onPhotoClick?: (photo: Photo, event: ReactMouseEvent) => void;
@@ -51,6 +52,7 @@ const TimelineView = memo(function TimelineView({
   photos,
   thumbnailSize = 200,
   gap = 16,
+  selectedIds = new Set(),
   hasMore = false,
   loading = false,
   onPhotoClick,
@@ -128,11 +130,13 @@ const TimelineView = memo(function TimelineView({
       };
 
       return (
-        <div key={group.date} className="mb-6">
-          <div className="sticky top-0 z-10 mb-3 px-2 py-2 bg-background/80 backdrop-blur-sm">
+        <div key={group.date} className="mb-8">
+          <div className="sticky top-0 z-10 mb-4 px-2 py-3 bg-surface/95 backdrop-blur-md border-b border-border/40 transition-all duration-200">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-primary">{group.displayDate}</h3>
-              <span className="text-xs text-muted-foreground">{group.photos.length} 张</span>
+              <h3 className="text-xl font-semibold tracking-tight text-on-surface flex items-baseline gap-2">
+                {group.displayDate}
+                <span className="text-sm font-normal text-muted-foreground">{group.photos.length} 张</span>
+              </h3>
             </div>
           </div>
 
@@ -148,6 +152,7 @@ const TimelineView = memo(function TimelineView({
                 key={photo.photoId}
                 photo={photo}
                 size={thumbnailSize - 40}
+                selected={selectedIds.has(photo.photoId)}
                 onClick={onPhotoClick}
                 onDoubleClick={onPhotoDoubleClick}
                 onContextMenu={onPhotoContextMenu}
@@ -218,6 +223,7 @@ const TimelineView = memo(function TimelineView({
   return (
     <div className="h-full w-full">
       <Virtuoso
+        style={{ height: '100%' }}
         ref={virtuosoRef}
         key={`timeline-${location.key}-${thumbnailSize}`}
         totalCount={dateGroups.length}

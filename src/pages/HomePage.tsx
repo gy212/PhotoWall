@@ -619,13 +619,13 @@ function HomePage() {
   const gridSettings = useMemo(() => {
     switch (viewStyle) {
       case 'compact':
-        return { size: 150, gap: 4 };
+        return { size: 150, gap: 2 };
       case 'spaced':
-        return { size: 200, gap: 16 };
+        return { size: 200, gap: 8 };
       case 'aspect':
-        return { size: 240, gap: 16 };
+        return { size: 240, gap: 12 };
       default:
-        return { size: 200, gap: 16 };
+        return { size: 200, gap: 8 };
     }
   }, [viewStyle]);
 
@@ -770,7 +770,7 @@ function HomePage() {
       </div>
 
       {/* 主内容区域 - 移除 overflow-y-auto，让虚拟列表自己管理滚动 */}
-      <div className="flex-1 min-h-0 mt-6 relative">
+      <div className="flex-1 min-h-0 mt-2 relative">
         {/* 错误提示 */}
         {error && (
           <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-50/90 px-6 py-3 text-sm font-medium text-red-600 shadow-lg backdrop-blur-md ring-1 ring-red-200 dark:bg-red-900/80 dark:text-red-100 dark:ring-red-800">
@@ -796,33 +796,43 @@ function HomePage() {
           </div>
         )}
 
-        {/* 选择操作栏 */}
+        {/* 选择操作栏 - 现代化 Dock 样式 */}
         {selectedIds.size > 0 && (
-          <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 flex items-center space-x-3 rounded-full bg-primary px-6 py-3 text-white shadow-xl">
-            <span className="text-sm font-semibold">
-              已选择 {selectedIds.size} 项
-            </span>
-            <div className="h-5 w-px bg-white/30" />
+          <div className="absolute bottom-8 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-on-surface/90 backdrop-blur-xl px-4 py-2 text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+            <div className="px-3 py-1 bg-white/10 rounded-xl mr-2">
+              <span className="text-sm font-bold tracking-tight">
+                已选择 {selectedIds.size} 项
+              </span>
+            </div>
+            
             <button
               onClick={() => handleToggleFavorite(true)}
               disabled={favoriting}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20 disabled:opacity-50"
+              className="group flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-white/10 transition-all active:scale-90 disabled:opacity-50"
+              title="���藏"
             >
-              <span className="material-symbols-outlined text-lg">favorite</span>
-              <span>收藏</span>
+              <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">favorite</span>
+              <span className="text-[10px] font-medium mt-0.5">收藏</span>
             </button>
+
             <button
               onClick={handleDeleteClick}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
+              className="group flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-red-500/20 text-white transition-all active:scale-90"
+              title="删除"
             >
-              <span className="material-symbols-outlined text-lg">delete</span>
-              <span>删除</span>
+              <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform text-red-400">delete</span>
+              <span className="text-[10px] font-medium mt-0.5 text-red-400">删除</span>
             </button>
+
+            <div className="w-px h-8 bg-white/20 mx-1" />
+
             <button
               onClick={() => clearSelection()}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
+              className="group flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-white/10 transition-all active:scale-90"
+              title="取消选择"
             >
-              <span className="material-symbols-outlined text-lg">close</span>
+              <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">close</span>
+              <span className="text-[10px] font-medium mt-0.5">取消</span>
             </button>
           </div>
         )}
@@ -833,6 +843,7 @@ function HomePage() {
             photos={photos}
             thumbnailSize={gridSettings.size}
             gap={gridSettings.gap}
+            selectedIds={selectedIds}
             hasMore={hasMore}
             loading={loading}
             onPhotoClick={handlePhotoClick}
@@ -846,6 +857,7 @@ function HomePage() {
             photos={photos}
             thumbnailSize={gridSettings.size}
             gap={gridSettings.gap}
+            selectedIds={selectedIds}
             loading={loading}
             hasMore={hasMore}
             onPhotoClick={handlePhotoClick}

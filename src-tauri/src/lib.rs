@@ -43,7 +43,7 @@ use commands::{
     reorder_album_photos, remove_photos_from_album,
     // thumbnails
     generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
-    get_libraw_status, get_thumbnail_stats, check_thumbnails_cached, warm_thumbnail_cache,
+    get_libraw_status, get_thumbnail_stats, check_thumbnails_cached, warm_thumbnail_cache, get_raw_preview,
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
@@ -219,6 +219,7 @@ pub fn run() {
             get_thumbnail_stats,
             check_thumbnails_cached,
             warm_thumbnail_cache,
+            get_raw_preview,
             // file_ops
             import_photos,
             export_photos,

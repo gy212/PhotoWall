@@ -62,12 +62,16 @@ impl ThumbnailSize {
 /// 缩略图生成结果
 #[derive(Debug, Clone)]
 pub struct ThumbnailResult {
-    /// 缩略图路径
+    /// 缩略图路径（占位图时为空）
     pub path: PathBuf,
     /// 是否命中缓存
     pub hit_cache: bool,
     /// 生成耗时（毫秒）
     pub generation_time_ms: Option<u64>,
+    /// 是否为占位图（RAW 提取失败时生成）
+    pub is_placeholder: bool,
+    /// 占位图字节数据（WebP 格式，仅占位图时有值）
+    pub placeholder_bytes: Option<Vec<u8>>,
 }
 
 /// 正在生成中的缩略图追踪（用于去重）
@@ -175,6 +179,8 @@ impl ThumbnailService {
                 path: cache_path,
                 hit_cache: true,
                 generation_time_ms: None,
+                is_placeholder: false,
+                placeholder_bytes: None,
             });
         }
 
@@ -193,6 +199,8 @@ impl ThumbnailService {
                         path: cache_path,
                         hit_cache: true,
                         generation_time_ms: None,
+                        is_placeholder: false,
+                        placeholder_bytes: None,
                     });
                 }
             }
@@ -204,28 +212,49 @@ impl ThumbnailService {
         let start = std::time::Instant::now();
         let result = self.generate(source_path, file_hash, size);
 
-        // 生成完成，移除标��并通知等待的线程
+        // 生成完成，移除标记并通知等待的线程
         {
             let mut tracker = lock.lock().unwrap();
             tracker.in_flight.remove(&key);
             cvar.notify_all();
         }
 
-        result?;
         let elapsed = start.elapsed().as_millis() as u64;
 
-        tracing::info!(
-            "生成缩略图: {:?} -> {:?} ({}ms)",
-            source_path,
-            cache_path,
-            elapsed
-        );
-
-        Ok(ThumbnailResult {
-            path: cache_path,
-            hit_cache: false,
-            generation_time_ms: Some(elapsed),
-        })
+        // 处理占位图情况（RAW 提取失败）
+        match result {
+            Ok(path) => {
+                tracing::info!(
+                    "生成缩略图: {:?} -> {:?} ({}ms)",
+                    source_path,
+                    path,
+                    elapsed
+                );
+                Ok(ThumbnailResult {
+                    path,
+                    hit_cache: false,
+                    generation_time_ms: Some(elapsed),
+                    is_placeholder: false,
+                    placeholder_bytes: None,
+                })
+            }
+            Err(AppError::PlaceholderGenerated(bytes)) => {
+                tracing::debug!(
+                    "RAW 占位图生成: {:?} ({}ms, {} bytes)",
+                    source_path,
+                    elapsed,
+                    bytes.len()
+                );
+                Ok(ThumbnailResult {
+                    path: PathBuf::new(),
+                    hit_cache: false,
+                    generation_time_ms: Some(elapsed),
+                    is_placeholder: true,
+                    placeholder_bytes: Some(bytes),
+                })
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 生成缩略图 (优化版: 优先使用 WIC)
@@ -286,11 +315,22 @@ impl ThumbnailService {
             // RAW 格式:
             // - 列表/网格页（Small/Medium）严格禁止 RAW 硬解码（去马赛克），避免滚动卡顿
             // - 优先提取嵌入预览图；失败则生成占位缩略图，保证 UI 稳定
-            self.extract_raw_preview(source_path, size)
-                .unwrap_or_else(|| {
-                    tracing::debug!("RAW 预览提取失败，使用占位缩略图");
-                    self.generate_raw_placeholder(size)
-                })
+            // - 占位图不缓存到磁盘，下次请求时重试提取
+            match self.extract_raw_preview(source_path, size) {
+                Some(img) => img,
+                None => {
+                    tracing::debug!("RAW 预览提取失败，生成临时占位图（不缓存）");
+                    let placeholder = self.generate_raw_placeholder(size);
+                    // 将占位图编码为 WebP 字节，不保存到磁盘
+                    let mut bytes = Vec::new();
+                    let mut cursor = std::io::Cursor::new(&mut bytes);
+                    if placeholder.write_to(&mut cursor, ImageFormat::WebP).is_ok() {
+                        return Err(AppError::PlaceholderGenerated(bytes));
+                    }
+                    // 编码失败时返回空占位图
+                    return Err(AppError::PlaceholderGenerated(Vec::new()));
+                }
+            }
         } else {
             // 其他格式: 正常加载
             image::open(source_path)?
@@ -355,10 +395,12 @@ impl ThumbnailService {
     /// - 扫描和硬解码仅在 Large 尺寸时作为最后手段
     /// - 所有 RAW 提取都有超时保护，避免单个文件卡住队列
     fn extract_raw_preview(&self, path: &Path, size: ThumbnailSize) -> Option<DynamicImage> {
-        // Tiny/Small/Medium 使用较短超时（200ms），Large 允许更长（500ms）
+        // 超时时间优化：给 RAW 提取更多时间以提高成功率
+        // LibRaw 提取嵌入预览通常需要 200-400ms，给足够的余量
         let timeout_ms = match size {
-            ThumbnailSize::Tiny | ThumbnailSize::Small | ThumbnailSize::Medium => 200,
-            ThumbnailSize::Large => 500,
+            ThumbnailSize::Tiny => 800,
+            ThumbnailSize::Small | ThumbnailSize::Medium => 1500,
+            ThumbnailSize::Large => 3000,
         };
 
         // 方法1: LibRaw 提取 embedded preview（首选，行业级实现，自动选最大预览）
@@ -431,7 +473,7 @@ impl ThumbnailService {
     ///
     /// 大多数相机 RAW 文件（NEF、CR2、DNG 等）都会嵌入一个或多个 JPEG 预览图。
     /// 这里采用流式扫描，避免一次性读入整个文件导致内存和 IO 峰值过高。
-    fn scan_embedded_jpeg_limited(
+    pub fn scan_embedded_jpeg_limited(
         &self,
         path: &Path,
         max_scan_bytes: u64,
@@ -610,7 +652,7 @@ impl ThumbnailService {
     }
 
     /// 使用 rawloader 解码 RAW 图像（带 Bayer 去马赛克处理）
-    fn decode_raw_image(&self, path: &Path) -> Option<DynamicImage> {
+    pub fn decode_raw_image(&self, path: &Path) -> Option<DynamicImage> {
         use rawloader::RawLoader;
 
         let loader = RawLoader::new();

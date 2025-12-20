@@ -284,17 +284,34 @@ export async function getThumbnailStats(): Promise<ThumbnailStats> {
   return invoke<ThumbnailStats>('get_thumbnail_stats');
 }
 
-// Legacy exports for compatibility
-export const useThumbnailWithEvents = useThumbnail;
 // ============ 事件驱动加载 ============
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+
+// Helper functions for cache operations
+function getFromCache(fileHash: string, size: ThumbnailSize): string | undefined {
+  return thumbnailStore.get(fileHash, size);
+}
+
+function touchCache(fileHash: string, size: ThumbnailSize): void {
+  // Touch is a no-op for now, store handles LRU internally
+  void fileHash;
+  void size;
+}
+
+function addToCache(fileHash: string, size: ThumbnailSize, url: string): void {
+  thumbnailStore.set(fileHash, size, url);
+}
 
 /** thumbnail-ready 事件的 payload */
 export interface ThumbnailReadyPayload {
   fileHash: string;
   size: string;
   path: string;
+  /** 是否为占位图（RAW 提取失败时生成，不缓存到磁盘） */
+  isPlaceholder: boolean;
+  /** 占位图 Base64 编码（WebP 格式，仅占位图时有值） */
+  placeholderBase64?: string;
 }
 
 /**
@@ -402,8 +419,18 @@ export function useThumbnailWithEvents(
           if (!mountedRef.current) return;
 
           if (event.payload.fileHash === fileHash && event.payload.size === opts.size) {
-            const url = convertFileSrc(event.payload.path);
-            addToCache(fileHash, opts.size, url);
+            let url: string;
+
+            if (event.payload.isPlaceholder && event.payload.placeholderBase64) {
+              // 占位图：使用 data URL，不添加到持久缓存
+              url = `data:image/webp;base64,${event.payload.placeholderBase64}`;
+              // 注意：占位图不添加到缓存，下次请求时会重试提取
+            } else {
+              // 正常缩略图：转换文件路径并添加到缓存
+              url = convertFileSrc(event.payload.path);
+              addToCache(fileHash, opts.size, url);
+            }
+
             setThumbnailUrl(url);
             setIsLoading(false);
 
