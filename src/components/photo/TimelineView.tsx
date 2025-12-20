@@ -130,13 +130,19 @@ const TimelineView = memo(function TimelineView({
       };
 
       return (
-        <div key={group.date} className="mb-8">
-          <div className="sticky top-0 z-10 mb-4 px-2 py-3 bg-surface/95 backdrop-blur-md border-b border-border/40 transition-all duration-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold tracking-tight text-on-surface flex items-baseline gap-2">
-                {group.displayDate}
-                <span className="text-sm font-normal text-muted-foreground">{group.photos.length} 张</span>
-              </h3>
+        <div key={group.date} className="mb-10 relative">
+          <div className="sticky top-0 z-20 mb-4 px-1 py-3 bg-surface/90 backdrop-blur-xl border-b border-border/40 transition-all duration-200">
+            <div className="flex items-baseline justify-between">
+              <div className="flex items-baseline gap-3">
+                <h3 className="text-2xl font-bold tracking-tight text-on-surface">
+                  {group.displayDate}
+                </h3>
+                <span className="text-sm font-medium text-zinc-400">
+                  {group.photos.length} 张
+                </span>
+              </div>
+              
+              {/* 可选：以后可以在这里添加"全选当"按钮 */}
             </div>
           </div>
 
@@ -164,7 +170,7 @@ const TimelineView = memo(function TimelineView({
           {hasMorePhotos && (
             <button
               onClick={handleShowMore}
-              className="mt-3 w-full py-2 text-sm text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              className="mt-4 w-full py-3 text-sm font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-xl transition-all duration-200"
             >
               加载更多（剩余 {remainingCount} 张）
             </button>

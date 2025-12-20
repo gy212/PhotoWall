@@ -125,7 +125,11 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   return (
     <div
       className={clsx(
-        'group relative cursor-pointer overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 box-border',
+        'group relative cursor-pointer overflow-hidden rounded-xl bg-white dark:bg-zinc-900 box-border',
+        'border border-zinc-200 dark:border-zinc-800', // 清晰的边框
+        'transition-all duration-200 ease-out', // 快速响应
+        !selected && 'hover:border-zinc-400 dark:hover:border-zinc-500 hover:shadow-sm', // 悬停加深边框
+        selected && 'ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2 ring-offset-white dark:ring-offset-black border-transparent' // 选中态：黑色强边框
       )}
       style={{ width: size, height: size }}
       onClick={handleClick}
@@ -142,22 +146,23 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={tinyUrl}
           alt=""
           className={clsx(
-            'absolute inset-0 h-full w-full object-cover rounded-xl transition-opacity duration-200',
-            'blur-sm scale-105', // 模糊并略微放大以隐藏像素化
+            'absolute inset-0 h-full w-full object-cover transition-opacity duration-500',
+            'blur-md scale-105', // 模糊并略微放大以隐藏像素化
             tinyLoaded ? 'opacity-100' : 'opacity-0'
           )}
           onLoad={handleTinyLoad}
           decoding="async"
         />
       )}
-      {/* 完整缩略图 */}
+      {/* 完整缩略图 - 内缩 1px 以防遮挡边框 (可选，这里保持充满) */}
       {!hasError && fullImageUrl && (
         <img
           src={fullImageUrl}
           alt={photo.fileName}
           className={clsx(
-            'block h-full w-full object-cover rounded-xl transition-opacity duration-200',
+            'block h-full w-full object-cover transition-all duration-500',
             fullLoaded ? 'opacity-100' : 'opacity-0'
+            // !selected && 'group-hover:opacity-90' // 悬停轻微变暗
           )}
           onLoad={handleFullLoad}
           onError={handleError}
@@ -165,60 +170,63 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         />
       )}
       {hasError && (
-        <div className="flex h-full w-full flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-400">
-          <svg className="h-8 w-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span className="text-xs">无法加载</span>
+        <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900 text-zinc-300">
+          <span className="material-symbols-outlined text-3xl mb-1 opacity-50">broken_image</span>
+          <span className="text-[10px] font-medium opacity-70">无法加载</span>
         </div>
       )}
 
       {isLoading && (
-        <div className="absolute inset-0 animate-pulse bg-gray-200" />
+        <div className="absolute inset-0 animate-pulse bg-zinc-100 dark:bg-zinc-800" />
       )}
 
-      {/* 选中遮罩层 */}
+      {/* 选中遮罩层 - 仅在选中时显示轻微遮罩 */}
       <div
         className={clsx(
-          'absolute inset-0 transition-all duration-200 pointer-events-none',
-          selected ? 'bg-primary/20 ring-4 ring-primary ring-inset' : 'bg-transparent group-hover:bg-black/5'
+          'absolute inset-0 transition-opacity duration-200 pointer-events-none',
+          selected ? 'bg-black/10 dark:bg-white/10' : 'bg-transparent'
         )}
       />
 
+      {/* 选择框 - Nucleo 风格 */}
       <div
         className={clsx(
-          'absolute top-3 left-3 z-10 transition-[transform,opacity] duration-200',
-          selected ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'
+          'absolute top-2 left-2 z-10 transition-all duration-200',
+          selected 
+            ? 'opacity-100 scale-100' 
+            : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'
         )}
         onClick={handleSelectToggle}
       >
         <div
           className={clsx(
-            'flex h-6 w-6 items-center justify-center rounded-full transition-all shadow-sm ring-1 ring-black/5',
+            'flex h-5 w-5 items-center justify-center rounded-full transition-all shadow-sm',
             selected 
-              ? 'bg-primary text-white scale-110 ring-primary' 
-              : 'bg-white/90 text-gray-400 hover:bg-white hover:text-primary hover:scale-110'
+              ? 'bg-zinc-900 text-white shadow-md dark:bg-zinc-100 dark:text-zinc-900' 
+              : 'bg-white/90 border border-zinc-200 hover:border-zinc-400 text-transparent hover:text-zinc-300'
           )}
         >
           {selected ? (
-            <span className="material-symbols-outlined text-base font-bold">check</span>
+            <span className="material-symbols-outlined text-[14px] font-bold">check</span>
           ) : (
-             <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-300 group-hover:border-primary/60" />
+             <span className="material-symbols-outlined text-[14px]">check</span>
           )}
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#2d3748]/80 via-[#2d3748]/40 to-transparent p-3 pt-8 opacity-0 transition-opacity duration-200 group-hover:opacity-100 rounded-b-2xl">
-        <p className="truncate text-xs font-bold text-white drop-shadow-sm">
+      {/* 文件名遮罩 - 优化渐变 */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent p-3 pt-6 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <p className="truncate text-[11px] font-medium text-white/90 drop-shadow-sm leading-tight">
           {photo.fileName}
         </p>
       </div>
 
+      {/* 收藏图标 */}
       {photo.isFavorite && (
-        <div className="absolute top-3 right-3 z-10">
-          <svg className="h-5 w-5 text-red-500 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
+        <div className="absolute top-2 right-2 z-10">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 backdrop-blur-md shadow-sm">
+             <span className="material-symbols-outlined text-[14px] text-white fill-current drop-shadow-md">favorite</span>
+          </div>
         </div>
       )}
     </div>

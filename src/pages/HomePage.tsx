@@ -687,87 +687,88 @@ function HomePage() {
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-surface rounded-xl">
-      {/* 页面头部 */}
-      <div className="flex flex-col p-6 pb-0">
-        {/* 标题和操作栏 */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col min-w-72">
-            <h1 className="text-on-surface text-4xl font-black leading-tight tracking-tight">所有照片</h1>
-            <p className="text-on-surface-variant text-base font-normal">
-              {formatCount(totalCount)} 张照片
-            </p>
-          </div>
+    <div className="flex flex-col h-full w-full bg-surface relative">
+      {/* 统一的吸顶头部 - Nucleo 风格 */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-200">
+        {/* 左侧：标题与统计 */}
+        <div className="flex items-baseline gap-3 min-w-[200px]">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">所有照片</h1>
+          <span className="text-sm font-medium text-zinc-400">
+            {formatCount(totalCount)} 张
+          </span>
         </div>
 
-        {/* 搜索栏和视图切换 */}
-        <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
-          {/* 搜索框 */}
-          <div className="w-full">
-            <label className="flex flex-col w-full h-12 min-w-40">
-              <div className="flex items-stretch flex-1 w-full h-full rounded-lg">
-                <div className="text-on-surface-variant flex items-center justify-center pl-4 bg-button rounded-l-lg">
-                  <span className="material-symbols-outlined text-xl">search</span>
-                </div>
-                <input 
-                  className="flex-1 w-full min-w-0 p-0 px-3 text-sm font-normal text-on-surface placeholder-on-surface-variant border-none rounded-r-lg bg-button focus:outline-none focus:ring-0" 
-                  placeholder="按日期、地点或人物搜索"
-                  value={localSearchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                />
-              </div>
-            </label>
-          </div>
-
-          {/* 视图切换 */}
-          <div className="flex items-center justify-start md:justify-end">
-            <div className="flex items-center justify-center h-10 p-1 rounded-lg bg-button">
-              <label className={clsx(
-                'flex items-center justify-center h-full px-3 overflow-hidden text-sm font-medium rounded-md cursor-pointer text-on-surface-variant transition-colors',
-                viewStyle === 'compact' && 'bg-surface text-on-surface shadow-sm'
-              )}>
-                <span>紧凑</span>
-                <input 
-                  className="w-0 invisible" 
-                  name="view-toggle" 
-                  type="radio" 
-                  value="compact"
-                  checked={viewStyle === 'compact'}
-                  onChange={() => setViewStyle('compact')}
-                />
-              </label>
-              <label className={clsx(
-                'flex items-center justify-center h-full px-3 overflow-hidden text-sm font-medium rounded-md cursor-pointer text-on-surface-variant transition-colors',
-                viewStyle === 'spaced' && 'bg-surface text-on-surface shadow-sm'
-              )}>
-                <span>适中</span>
-                <input 
-                  className="w-0 invisible" 
-                  name="view-toggle" 
-                  type="radio" 
-                  value="spaced"
-                  checked={viewStyle === 'spaced'}
-                  onChange={() => setViewStyle('spaced')}
-                />
-              </label>
-              <label className={clsx(
-                'flex items-center justify-center h-full px-3 overflow-hidden text-sm font-medium rounded-md cursor-pointer text-on-surface-variant transition-colors',
-                viewStyle === 'aspect' && 'bg-surface text-on-surface shadow-sm'
-              )}>
-                <span>原始比例</span>
-                <input 
-                  className="w-0 invisible" 
-                  name="view-toggle" 
-                  type="radio" 
-                  value="aspect"
-                  checked={viewStyle === 'aspect'}
-                  onChange={() => setViewStyle('aspect')}
-                />
-              </label>
+        {/* 中间：搜索框 (居中) */}
+        <div className="flex-1 max-w-xl px-4">
+          <div className="relative group w-full">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="material-symbols-outlined text-[20px] text-zinc-400 group-focus-within:text-zinc-900 transition-colors">search</span>
             </div>
+            <input
+              className="block w-full pl-10 pr-3 py-2 text-[14px] bg-zinc-100 dark:bg-zinc-900 border-none rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-zinc-900/10 focus:bg-white dark:focus:bg-zinc-800 transition-all duration-200"
+              placeholder="搜索图标、照片..."
+              value={localSearchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
           </div>
         </div>
-      </div>
+
+        {/* 右侧：视图切换 - Outlined Buttons */}
+        <div className="flex items-center justify-end min-w-[200px] gap-3">
+           {/* 导入按钮 */}
+           <button
+            onClick={handleAddFolder}
+            disabled={indexing}
+            className="flex items-center justify-center h-8 w-8 rounded-md border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 hover:text-zinc-900 transition-all active:scale-95 shadow-sm dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            title="添加文件夹"
+          >
+            {indexing ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-transparent" />
+            ) : (
+              <span className="material-symbols-outlined text-[20px]">add</span>
+            )}
+          </button>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setViewStyle('compact')}
+              className={clsx(
+                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                viewStyle === 'compact' 
+                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900' 
+                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+              )}
+              title="紧凑视图"
+            >
+              紧凑
+            </button>
+            <button
+              onClick={() => setViewStyle('spaced')}
+              className={clsx(
+                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                viewStyle === 'spaced'
+                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
+                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+              )}
+              title="标准视图"
+            >
+              适中
+            </button>
+            <button
+              onClick={() => setViewStyle('aspect')}
+              className={clsx(
+                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                viewStyle === 'aspect'
+                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
+                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+              )}
+              title="原始比例"
+            >
+              原比
+            </button>
+          </div>
+        </div>
+      </header>
 
       {/* 主内容区域 - 移除 overflow-y-auto，让虚拟列表自己管理滚动 */}
       <div className="flex-1 min-h-0 mt-2 relative">
@@ -869,14 +870,7 @@ function HomePage() {
         )}
       </div>
 
-      {/* 浮动添加按钮 */}
-      <button
-        onClick={handleAddFolder}
-        className="absolute bottom-10 right-10 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:bg-primary-dark transition-colors"
-        title="添加照片"
-      >
-        <span className="material-symbols-outlined text-2xl">add</span>
-      </button>
+
 
       {/* 查看器 */}
       {viewerOpen && viewerPhoto && (
