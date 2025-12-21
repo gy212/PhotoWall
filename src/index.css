@@ -56,25 +56,36 @@
     --radius: 0.75rem;
   }
 
-  /* === 深色主题 === */
+  /* === 深色主题 (JetBrains New UI 风格) === */
   .dark {
-    --bg-base: #101922;
-    --bg-sidebar: #1a2332;
-    --bg-surface: #1e2738;
-    --bg-element: #2a3544;
-    --bg-hover: #3a4554;
+    /* 核心背景 - 冷灰/深蓝灰 */
+    --bg-base: #1e1f22;      /* 编辑器/底层背景 */
+    --bg-sidebar: #2b2d30;   /* 工具栏/侧边栏背景 */
+    --bg-surface: #2b2d30;   /* 主要内容面板背景 - 与侧边栏一致 */
     
-    --text-primary: #f5f5f7;
-    --text-secondary: #9ca3af;
-    --text-tertiary: #6b7280;
+    /* 交互元素 */
+    --bg-element: #393b40;   /* 输入框、未选中按钮、卡片背景 */
+    --bg-hover: #35373b;     /* 悬停状态 */
     
-    --border-color: #3a4554;
-    --border-light: #2a3544;
+    /* 文本颜色 */
+    --text-primary: #dfe1e5;
+    --text-secondary: #9da0a5;
+    --text-tertiary: #6f737a;
     
+    /* 边框与分割线 */
+    --border-color: #26282e; /* 极深色边框，接近背景色，避免发光感 */
+    --border-light: #2b2d30;
+    
+    /* 品牌色 - JetBrains Blue */
+    --primary: #3574f0;
+    --primary-light: #3574f0;
+    --primary-dark: #3069db;
+    
+    /* 变量映射 */
     --color-background: var(--bg-base);
     --color-surface: var(--bg-surface);
     --color-primary: var(--primary);
-    --color-primary-hover: #3395ff;
+    --color-primary-hover: var(--primary-dark);
     --color-primary-foreground: #ffffff;
     --color-secondary: var(--text-secondary);
     --color-secondary-foreground: var(--text-primary);
@@ -133,8 +144,8 @@
   }
 
   .dark .nav-item.active {
-    background: rgba(0, 122, 255, 0.2);
-    color: #3395ff;
+    background: rgba(53, 116, 240, 0.15); /* Primary color low opacity */
+    color: #3574f0;
   }
 
   /* 主内容面板 */
@@ -153,7 +164,7 @@
   }
 
   .dark .card {
-    background: rgba(30, 39, 56, 0.7);
+    background: var(--bg-element);
     border-color: var(--border-color);
   }
 
@@ -368,7 +379,7 @@
   }
 
   .dark .nav-active {
-    background: rgba(0, 122, 255, 0.2);
-    color: #3395ff;
+    background: rgba(53, 116, 240, 0.15);
+    color: #3574f0;
   }
 }

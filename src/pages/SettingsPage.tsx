@@ -276,7 +276,7 @@ function SettingsPage() {
             {/* Folder Sync */}
             <section 
               ref={(el) => { sectionRefs.current['sync'] = el; }}
-              className="rounded-2xl border border-outline/40 bg-white/70 p-6 shadow-sm backdrop-blur-lg"
+              className="card p-6"
             >
               <h3 className="text-lg font-semibold text-on-surface">文件夹同步</h3>
               <p className="text-sm text-on-surface-variant mb-4">管理自动扫描新照片的文件夹。</p>
@@ -296,7 +296,7 @@ function SettingsPage() {
                         'group flex items-center justify-between gap-4 rounded-xl p-4 transition-all',
                         folder.isValid
                           ? 'bg-button hover:bg-outline/40'
-                          : 'bg-red-50'
+                          : 'bg-red-50 dark:bg-red-900/20'
                       )}
                     >
                       <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -363,7 +363,7 @@ function SettingsPage() {
             {/* Appearance */}
             <section 
               ref={(el) => { sectionRefs.current['appearance'] = el; }}
-              className="rounded-2xl border border-outline/40 bg-white/70 p-6 shadow-sm backdrop-blur-lg"
+              className="card p-6"
             >
               <h3 className="text-lg font-semibold text-on-surface">外观</h3>
               <p className="text-sm text-on-surface-variant mb-4">选择应用程序的外观。系统模式将跟随您的操作系统设置。</p>
@@ -400,9 +400,9 @@ function SettingsPage() {
             {/* Photo Scanning */}
             <section 
               ref={(el) => { sectionRefs.current['scan'] = el; }}
-              className="rounded-2xl border border-outline/40 bg-white/70 shadow-sm backdrop-blur-lg"
+              className="card overflow-hidden"
             >
-              <div className="p-6">
+              <div className="p-6 pb-2">
                 <h3 className="text-lg font-semibold text-on-surface">照片扫描</h3>
                 <p className="text-sm text-on-surface-variant">配置应用程序如何查找和处理您的照片。</p>
               </div>
@@ -453,7 +453,7 @@ function SettingsPage() {
             {/* Thumbnails */}
             <section 
               ref={(el) => { sectionRefs.current['thumbnail'] = el; }}
-              className="rounded-2xl border border-outline/40 bg-white/70 p-6 shadow-sm backdrop-blur-lg"
+              className="card p-6"
             >
               <h3 className="text-lg font-semibold text-on-surface">缩略图</h3>
               <p className="text-sm text-on-surface-variant mb-6">配置缩略图生成和缓存设置。</p>
@@ -506,7 +506,7 @@ function SettingsPage() {
             {/* Performance */}
             <section 
               ref={(el) => { sectionRefs.current['performance'] = el; }}
-              className="rounded-2xl border border-outline/40 bg-white/70 p-6 shadow-sm backdrop-blur-lg"
+              className="card p-6"
             >
               <h3 className="text-lg font-semibold text-on-surface">性能</h3>
               <p className="text-sm text-on-surface-variant mb-6">调整设置以优化应用程序的速度和资源使用。</p>

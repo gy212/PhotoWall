@@ -688,55 +688,55 @@ function HomePage() {
 
   return (
     <div className="flex flex-col h-full w-full bg-surface relative">
-      {/* 统一的吸顶头部 - Nucleo 风格 */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-200">
+      {/* 统一的吸顶头部 - Islands 风格 */}
+      <header className="sticky top-0 z-30 flex items-center justify-between px-5 py-3 bg-surface/90 backdrop-blur-xl transition-all duration-200">
         {/* 左侧：标题与统计 */}
         <div className="flex items-baseline gap-3 min-w-[200px]">
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">所有照片</h1>
-          <span className="text-sm font-medium text-zinc-400">
+          <h1 className="text-lg font-bold text-on-surface tracking-tight">所有照片</h1>
+          <span className="text-xs font-medium text-muted-foreground">
             {formatCount(totalCount)} 张
           </span>
         </div>
 
         {/* 中间：搜索框 (居中) */}
-        <div className="flex-1 max-w-xl px-4">
+        <div className="flex-1 max-w-md px-4">
           <div className="relative group w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="material-symbols-outlined text-[20px] text-zinc-400 group-focus-within:text-zinc-900 transition-colors">search</span>
+              <span className="material-symbols-outlined text-[18px] text-muted-foreground group-focus-within:text-primary transition-colors">search</span>
             </div>
             <input
-              className="block w-full pl-10 pr-3 py-2 text-[14px] bg-zinc-100 dark:bg-zinc-900 border-none rounded-lg text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:ring-2 focus:ring-zinc-900/10 focus:bg-white dark:focus:bg-zinc-800 transition-all duration-200"
-              placeholder="搜索图标、照片..."
+              className="block w-full pl-9 pr-3 py-1.5 text-[13px] bg-zinc-100/50 dark:bg-black/20 border-transparent rounded-lg text-on-surface placeholder-muted-foreground focus:border-primary/30 focus:ring-4 focus:ring-primary/10 focus:bg-surface transition-all duration-200 outline-none"
+              placeholder="搜索..."
               value={localSearchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
             />
           </div>
         </div>
 
-        {/* 右侧：视图切换 - Outlined Buttons */}
+        {/* 右侧：视图切换 - Islands Style Buttons */}
         <div className="flex items-center justify-end min-w-[200px] gap-3">
            {/* 导入按钮 */}
            <button
             onClick={handleAddFolder}
             disabled={indexing}
-            className="flex items-center justify-center h-8 w-8 rounded-md border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 hover:text-zinc-900 transition-all active:scale-95 shadow-sm dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="flex items-center justify-center h-9 w-9 rounded-xl border border-outline/50 bg-surface text-secondary hover:bg-zinc-50 hover:border-outline hover:text-primary transition-all active:scale-95 shadow-sm dark:bg-white/5 dark:border-white/10 dark:text-zinc-400 dark:hover:bg-white/10"
             title="添加文件夹"
           >
             {indexing ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
               <span className="material-symbols-outlined text-[20px]">add</span>
             )}
           </button>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center p-1 bg-zinc-100/50 dark:bg-black/20 rounded-xl border border-outline/20">
             <button
               onClick={() => setViewStyle('compact')}
               className={clsx(
-                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                'flex items-center justify-center h-7 px-3 text-xs font-medium rounded-lg transition-all duration-200',
                 viewStyle === 'compact' 
-                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900' 
-                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  ? 'bg-surface text-primary shadow-sm ring-1 ring-black/5 dark:bg-zinc-800 dark:text-white dark:ring-white/5' 
+                  : 'text-muted-foreground hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5'
               )}
               title="紧凑视图"
             >
@@ -745,10 +745,10 @@ function HomePage() {
             <button
               onClick={() => setViewStyle('spaced')}
               className={clsx(
-                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                'flex items-center justify-center h-7 px-3 text-xs font-medium rounded-lg transition-all duration-200',
                 viewStyle === 'spaced'
-                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
-                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  ? 'bg-surface text-primary shadow-sm ring-1 ring-black/5 dark:bg-zinc-800 dark:text-white dark:ring-white/5'
+                  : 'text-muted-foreground hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5'
               )}
               title="标准视图"
             >
@@ -757,10 +757,10 @@ function HomePage() {
             <button
               onClick={() => setViewStyle('aspect')}
               className={clsx(
-                'flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border transition-all duration-200',
+                'flex items-center justify-center h-7 px-3 text-xs font-medium rounded-lg transition-all duration-200',
                 viewStyle === 'aspect'
-                  ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900'
-                  : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                  ? 'bg-surface text-primary shadow-sm ring-1 ring-black/5 dark:bg-zinc-800 dark:text-white dark:ring-white/5'
+                  : 'text-muted-foreground hover:text-on-surface hover:bg-black/5 dark:hover:bg-white/5'
               )}
               title="原始比例"
             >

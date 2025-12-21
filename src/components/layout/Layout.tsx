@@ -34,21 +34,21 @@ function Layout() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* 侧边栏 */}
-      <aside className="flex h-full w-64 flex-shrink-0 flex-col border-r border-outline/60 bg-sidebar/80 backdrop-blur-xl">
+    <div className="flex h-screen w-screen overflow-hidden bg-background p-1.5 gap-1.5 transition-colors duration-300">
+      {/* 侧边栏 Island */}
+      <aside className="flex h-full w-64 flex-shrink-0 flex-col rounded-xl bg-sidebar/50 shadow-sm backdrop-blur-2xl overflow-hidden transition-all duration-300">
         <Sidebar />
       </aside>
 
-      {/* 主内容区 */}
-      <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+      {/* 主内容区 Island */}
+      <main className="flex-1 flex flex-col h-full min-w-0 rounded-xl bg-surface shadow-sm overflow-hidden relative transition-all duration-300">
         {/* 主内容区域 */}
         <div className="flex-1 min-h-0 overflow-hidden relative">
           <Outlet />
         </div>
 
         {/* 底部状态栏 */}
-        <footer className="h-8 flex-shrink-0 px-6 flex items-center text-xs font-medium text-text-tertiary border-t border-outline/30">
+        <footer className="h-8 flex-shrink-0 px-4 flex items-center text-xs font-medium text-text-tertiary bg-surface/50 backdrop-blur-sm">
           <StatusBar />
         </footer>
       </main>
