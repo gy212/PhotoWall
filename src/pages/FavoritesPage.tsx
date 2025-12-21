@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
+import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
 import {
   getFavoritePhotos,
   setPhotosFavorite,
@@ -323,31 +324,19 @@ function FavoritesPage() {
 
         {/* 选择操作栏 */}
         {selectedIds.size > 0 && (
-          <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 flex items-center space-x-3 rounded-full bg-primary px-6 py-3 text-white shadow-xl">
-            <span className="text-sm font-semibold">
-              已选择 {selectedIds.size} 项
-            </span>
-            <div className="h-5 w-px bg-white/30" />
-            <button
+          <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
+            <SelectionAction
+              icon={unfavoriting ? "" : "heart_minus"}
+              label="取消收藏"
               onClick={handleUnfavorite}
               disabled={unfavoriting}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20 disabled:opacity-50"
               title="移除收藏"
             >
-              {unfavoriting ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <span className="material-symbols-outlined text-lg">heart_minus</span>
+              {unfavoriting && (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
               )}
-              <span>取消收藏</span>
-            </button>
-            <button
-              onClick={() => clearSelection()}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-          </div>
+            </SelectionAction>
+          </SelectionToolbar>
         )}
 
         {/* 照片网格 */}

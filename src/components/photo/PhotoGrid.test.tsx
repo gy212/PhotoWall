@@ -10,7 +10,7 @@ vi.mock('react-virtuoso', async () => {
   const React = await import('react');
 
   return {
-    VirtuosoGrid: React.forwardRef((props: any, ref: any) => {
+    Virtuoso: React.forwardRef((props: any, ref: any) => {
       lastComponents = props.components;
 
       if (ref) {
@@ -28,7 +28,7 @@ vi.mock('react-virtuoso', async () => {
 
       const Footer = props.components?.Footer;
       return (
-        <div data-testid="virtuoso-grid">
+        <div data-testid="virtuoso">
           {Footer ? <Footer context={props.context} /> : null}
         </div>
       );
@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('PhotoGrid', () => {
-  it('loading 切换不会导致 VirtuosoGrid components 变化', () => {
+  it('loading 切换不会导致 Virtuoso components 变化', () => {
     const photos: Photo[] = [
       {
         photoId: 1,

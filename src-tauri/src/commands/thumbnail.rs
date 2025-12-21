@@ -30,6 +30,8 @@ pub struct ThumbnailResponse {
     /// 占位图 Base64 编码（WebP 格式，仅占位图时有值）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placeholder_base64: Option<String>,
+    /// 是否直接使用原图（小图跳过缩略图生成）
+    pub use_original: bool,
 }
 
 // ============ 统计相关结构体和命令 ============
@@ -156,18 +158,27 @@ pub fn is_raw_file(path: &str) -> bool {
 /// - source_path: 源图片绝对路径
 /// - file_hash: 该文件的指纹/哈希（用于作为缓存文件名）
 /// - size: small | medium | large（默认 medium）
+/// - width/height: 原图尺寸（可选，用于小图跳过逻辑）
 #[tauri::command]
 pub async fn generate_thumbnail(
     state: State<'_, AppState>,
     source_path: String,
     file_hash: String,
     size: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
 ) -> Result<ThumbnailResponse, CommandError> {
     // 解析尺寸（默认 medium）
     let size = size
         .as_deref()
         .and_then(ThumbnailSize::from_str)
         .unwrap_or(ThumbnailSize::Medium);
+
+    // 构建原图尺寸参数
+    let original_dimensions = match (width, height) {
+        (Some(w), Some(h)) => Some((w, h)),
+        _ => None,
+    };
 
     // 根据文件类型选择不同的 limiter：RAW 和普通格式隔离，避免 RAW 慢任务堵塞队列
     // Fast path: cache hit should return immediately.
@@ -184,6 +195,7 @@ pub async fn generate_thumbnail(
             generation_time_ms: None,
             is_placeholder: false,
             placeholder_base64: None,
+            use_original: false,
         });
     }
 
@@ -205,7 +217,7 @@ pub async fn generate_thumbnail(
     let service = state.thumbnail_service.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let path_buf = PathBuf::from(&source_path);
-        service.get_or_generate(&path_buf, &file_hash, size)
+        service.get_or_generate(&path_buf, &file_hash, size, original_dimensions)
     })
     .await
     .map_err(|e| CommandError::from(AppError::General(e.to_string())))??;
@@ -228,6 +240,7 @@ pub async fn generate_thumbnail(
         generation_time_ms: result.generation_time_ms,
         is_placeholder: result.is_placeholder,
         placeholder_base64,
+        use_original: result.use_original,
     })
 }
 
@@ -237,6 +250,7 @@ pub async fn generate_thumbnail(
 /// - file_hash: 文件哈希
 /// - size: small | medium | large（默认 medium）
 /// - priority: 优先级（数字越大优先级越高，默认 0）
+/// - width/height: 原图尺寸（可选，用于小图跳过逻辑）
 #[tauri::command]
 pub async fn enqueue_thumbnail(
     state: State<'_, AppState>,
@@ -244,17 +258,21 @@ pub async fn enqueue_thumbnail(
     file_hash: String,
     size: Option<String>,
     priority: Option<i32>,
+    width: Option<u32>,
+    height: Option<u32>,
 ) -> Result<(), CommandError> {
     let size = size
         .as_deref()
         .and_then(ThumbnailSize::from_str)
         .unwrap_or(ThumbnailSize::Medium);
 
-    let task = ThumbnailTask::new(
+    let task = ThumbnailTask::with_dimensions(
         PathBuf::from(source_path),
         file_hash,
         size,
         priority.unwrap_or(0),
+        width,
+        height,
     );
 
     state.thumbnail_queue.enqueue(task);
@@ -275,11 +293,13 @@ pub async fn enqueue_thumbnails_batch(
                 .as_deref()
                 .and_then(ThumbnailSize::from_str)
                 .unwrap_or(ThumbnailSize::Medium);
-            ThumbnailTask::new(
+            ThumbnailTask::with_dimensions(
                 PathBuf::from(input.source_path),
                 input.file_hash,
                 size,
                 input.priority.unwrap_or(0),
+                input.width,
+                input.height,
             )
         })
         .collect();
@@ -331,6 +351,10 @@ pub struct ThumbnailTaskInput {
     pub file_hash: String,
     pub size: Option<String>,
     pub priority: Option<i32>,
+    /// 原图宽度（用于小图跳过逻辑）
+    pub width: Option<u32>,
+    /// 原图高度（用于小图跳过逻辑）
+    pub height: Option<u32>,
 }
 
 /// LibRaw 状态信息

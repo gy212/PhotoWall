@@ -17,6 +17,10 @@ export interface ThumbnailOptions {
   enabled?: boolean;
   /** 加载延迟（毫秒，用于滚动时防抖） */
   loadDelay?: number;
+  /** 原图宽度（用于小图跳过逻辑） */
+  width?: number;
+  /** 原图高度（用于小图跳过逻辑） */
+  height?: number;
   /** @deprecated 总是使用队列 */
   useQueue?: boolean;
   /** @deprecated 重试由 Store/Backend 处理 */
@@ -43,6 +47,8 @@ const DEFAULT_OPTIONS: Required<ThumbnailOptions> = {
   priority: 0,
   enabled: true,
   loadDelay: 0,
+  width: 0,
+  height: 0,
   useQueue: true,
   retryCount: 0,
   retryDelay: 0,
@@ -70,6 +76,8 @@ export function useThumbnail(
     options.priority,
     options.enabled,
     options.loadDelay,
+    options.width,
+    options.height,
   ]);
 
   // Initial state from store if available
@@ -135,6 +143,8 @@ export function useThumbnail(
                     fileHash,
                     size: opts.size,
                     priority: opts.priority,
+                    width: opts.width || undefined,
+                    height: opts.height || undefined,
                  });
             }
         } catch (err) {
@@ -246,6 +256,8 @@ export async function enqueueThumbnails(
     fileHash: string;
     size?: ThumbnailSize;
     priority?: number;
+    width?: number;
+    height?: number;
   }>
 ): Promise<void> {
   await invoke('enqueue_thumbnails_batch', { tasks });
@@ -312,6 +324,8 @@ export interface ThumbnailReadyPayload {
   isPlaceholder: boolean;
   /** 占位图 Base64 编码（WebP 格式，仅占位图时有值） */
   placeholderBase64?: string;
+  /** 是否直接使用原图（小图跳过缩略图生成） */
+  useOriginal: boolean;
 }
 
 /**
@@ -336,12 +350,14 @@ export function useThumbnailWithEvents(
   fileHash: string,
   options: ThumbnailOptions = {},
 ): UseThumbnailResult {
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- ���意只依赖具体属性值
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 故意只依赖具体属性值
   const opts = useMemo(() => ({ ...DEFAULT_OPTIONS, ...options }), [
     options.size,
     options.priority,
     options.enabled,
     options.loadDelay,
+    options.width,
+    options.height,
   ]);
 
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
@@ -412,6 +428,8 @@ export function useThumbnailWithEvents(
           fileHash,
           size: opts.size,
           priority: opts.priority,
+          width: opts.width || undefined,
+          height: opts.height || undefined,
         });
 
         // 监听 thumbnail-ready 事件
@@ -421,7 +439,11 @@ export function useThumbnailWithEvents(
           if (event.payload.fileHash === fileHash && event.payload.size === opts.size) {
             let url: string;
 
-            if (event.payload.isPlaceholder && event.payload.placeholderBase64) {
+            if (event.payload.useOriginal) {
+              // 小图跳过：直接使用原图
+              url = convertFileSrc(event.payload.path);
+              addToCache(fileHash, opts.size, url);
+            } else if (event.payload.isPlaceholder && event.payload.placeholderBase64) {
               // 占位图：使用 data URL，不添加到持久缓存
               url = `data:image/webp;base64,${event.payload.placeholderBase64}`;
               // 注意：占位图不添加到缓存，下次请求时会重试提取

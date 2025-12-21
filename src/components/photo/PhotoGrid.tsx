@@ -1,18 +1,27 @@
 import { memo, useMemo, useCallback, useRef, useEffect, useLayoutEffect, useState, forwardRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { MouseEvent, CSSProperties } from 'react';
-import { VirtuosoGrid, type ContextProp, type GridComponents, type GridItemProps, type GridListProps, type ScrollerProps, type VirtuosoGridHandle, type ListRange } from 'react-virtuoso';
+import { Virtuoso, type VirtuosoHandle, type ListRange } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { enqueueThumbnails, isThumbnailCached, checkThumbnailsCached, addToCacheExternal, type ThumbnailSize } from '@/hooks';
 import type { Photo } from '@/types';
+import { getAspectRatioCategory, type AspectRatioCategory } from '@/types';
+
+interface PhotoWithLayout extends Photo {
+  aspectCategory: AspectRatioCategory;
+  colSpan: number;
+}
+
+interface GridRow {
+  id: string;
+  photos: PhotoWithLayout[];
+}
 
 type PhotoGridVirtuosoContext = {
   loading: boolean;
 };
-
-type GridScrollerProps = Omit<ScrollerProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>;
 
 type ScrollbarMode = 'auto' | 'stable-gutter' | 'force-scroll';
 let cachedScrollbarMode: ScrollbarMode | null = null;
@@ -53,9 +62,9 @@ function resolveScrollbarMode(): ScrollbarMode {
   return cachedScrollbarMode;
 }
 
-// 自定义 Scroller：仅在需要的系统上稳定滚动条占位，避免宽度变化导致的抖动
-const GridScroller = forwardRef<HTMLDivElement, GridScrollerProps>(
-  ({ style, context: _context, ...props }, ref) => {
+// 自定义 Scroller
+const GridScroller = forwardRef<HTMLDivElement, { style?: CSSProperties; children?: React.ReactNode }>(
+  ({ style, children, ...props }, ref) => {
     const [scrollbarMode, setScrollbarMode] = useState<ScrollbarMode>('auto');
 
     useLayoutEffect(() => {
@@ -72,13 +81,15 @@ const GridScroller = forwardRef<HTMLDivElement, GridScrollerProps>(
           ...(scrollbarMode === 'stable-gutter' ? ({ scrollbarGutter: 'stable' } as CSSProperties) : {}),
           overflowAnchor: 'none',
         }}
-      />
+      >
+        {children}
+      </div>
     );
   }
 );
 
-const GridFooter = memo(function GridFooter({ context }: ContextProp<PhotoGridVirtuosoContext>) {
-  if (!context.loading) {
+const GridFooter = memo(function GridFooter({ context }: { context?: PhotoGridVirtuosoContext }) {
+  if (!context?.loading) {
     return null;
   }
 
@@ -91,34 +102,21 @@ const GridFooter = memo(function GridFooter({ context }: ContextProp<PhotoGridVi
 });
 
 interface PhotoGridProps {
-  /** 照片列表 */
   photos: Photo[];
-  /** 缩略图大小 */
   thumbnailSize?: number;
-  /** 网格间距 */
   gap?: number;
-  /** 选中的照片ID集合 */
   selectedIds?: Set<number>;
-  /** 是否正在加载 */
   loading?: boolean;
-  /** 是否还有更多数据 */
   hasMore?: boolean;
-  /** 照片点击事件 */
   onPhotoClick?: (photo: Photo, event: MouseEvent) => void;
-  /** 照片双击事件 */
   onPhotoDoubleClick?: (photo: Photo) => void;
-  /** 照片右键菜单事件 */
   onPhotoContextMenu?: (photo: Photo, event: MouseEvent) => void;
-  /** 照片选择事件 */
   onPhotoSelect?: (photo: Photo, selected: boolean) => void;
-  /** 加载更多 */
   onLoadMore?: () => void;
 }
 
 /**
- * 照片网格组件
- *
- * 使用 react-virtuoso 实现虚拟滚动，高效渲染大量照片
+ * 照片网格组件 - 支持超宽/超长图自适应布局
  */
 const PhotoGrid = memo(function PhotoGrid({
   photos,
@@ -133,47 +131,101 @@ const PhotoGrid = memo(function PhotoGrid({
   onPhotoSelect,
   onLoadMore,
 }: PhotoGridProps) {
-  const virtuosoRef = useRef<VirtuosoGridHandle>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const location = useLocation();
   const firstPhotoId = photos[0]?.photoId ?? null;
   const prevFirstPhotoIdRef = useRef<number | null>(null);
   const prevLocationKeyRef = useRef(location.key);
   const [isScrolling, setIsScrolling] = useState(false);
   const virtuosoContext = useMemo<PhotoGridVirtuosoContext>(() => ({ loading }), [loading]);
+  const virtuosoComponents = useMemo(() => ({ Scroller: GridScroller, Footer: GridFooter }), []);
   const preloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [viewportSize, setViewportSize] = useState(() => ({
-    width: typeof window !== 'undefined' ? window.innerWidth : 1024,
-    height: typeof window !== 'undefined' ? window.innerHeight : 768,
-  }));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(1024);
+
+  // 计算列数
+  const columns = useMemo(() => {
+    const availableWidth = Math.max(0, containerWidth - gap * 2);
+    return Math.max(2, Math.floor(availableWidth / (thumbnailSize + gap)));
+  }, [containerWidth, gap, thumbnailSize]);
+
+  // 将照片分组为行
+  const rows = useMemo<GridRow[]>(() => {
+    const result: GridRow[] = [];
+    let currentRow: PhotoWithLayout[] = [];
+    let currentColCount = 0;
+    const flushRow = () => {
+      if (currentRow.length === 0) return;
+      result.push({
+        id: currentRow.map(p => p.photoId).join('-'),
+        photos: currentRow,
+      });
+      currentRow = [];
+      currentColCount = 0;
+    };
+
+    for (const photo of photos) {
+      const aspectCategory = getAspectRatioCategory(photo.width, photo.height);
+      const colSpan = aspectCategory === 'wide' ? Math.min(2, columns) : 1;
+
+      const photoWithLayout: PhotoWithLayout = {
+        ...photo,
+        aspectCategory,
+        colSpan,
+      };
+
+      if (aspectCategory === 'tall') {
+        flushRow();
+        result.push({
+          id: `${photo.photoId}`,
+          photos: [photoWithLayout],
+        });
+        continue;
+      }
+
+      // 如果当前行放不下，先保存当前行
+      if (currentColCount + colSpan > columns && currentRow.length > 0) {
+        flushRow();
+      }
+
+      currentRow.push(photoWithLayout);
+      currentColCount += colSpan;
+
+      // 行满了
+      if (currentColCount >= columns) {
+        flushRow();
+      }
+    }
+
+    // 最后一行
+    flushRow();
+
+    return result;
+  }, [photos, columns]);
 
   const overscanPx = useMemo(
     () => Math.round(Math.min(900, Math.max(400, thumbnailSize * 3))),
     [thumbnailSize]
   );
 
-  const increaseViewportBy = useMemo(
-    () => ({ top: Math.round(overscanPx * 0.5), bottom: overscanPx }),
-    [overscanPx]
-  );
+  // 监听容器宽度变化
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-  const estimatedVisibleCount = useMemo(() => {
-    const availableWidth = Math.max(0, viewportSize.width - gap * 2);
-    const columns = Math.max(1, Math.floor(availableWidth / (thumbnailSize + gap)));
-    const rows = Math.max(1, Math.ceil(viewportSize.height / (thumbnailSize + gap)));
-    return columns * rows;
-  }, [gap, thumbnailSize, viewportSize.height, viewportSize.width]);
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
 
-  const dataPrefetchThreshold = useMemo(
-    () => Math.min(80, Math.max(40, Math.floor(estimatedVisibleCount * 0.8))),
-    [estimatedVisibleCount]
-  );
+    observer.observe(container);
+    setContainerWidth(container.clientWidth);
 
-  const thumbnailPreloadCount = useMemo(
-    () => Math.min(40, Math.max(12, Math.floor(estimatedVisibleCount * 0.25))),
-    [estimatedVisibleCount]
-  );
+    return () => observer.disconnect();
+  }, []);
 
-  // Force recalculation after mount/route change so thumbnails render without manual scroll
+  // 路由/数据变化时滚动到顶部
   useEffect(() => {
     const locationChanged = prevLocationKeyRef.current !== location.key;
     const firstPhotoChanged = firstPhotoId !== null && prevFirstPhotoIdRef.current !== firstPhotoId;
@@ -193,19 +245,6 @@ const PhotoGrid = memo(function PhotoGrid({
     return () => cancelAnimationFrame(rafId);
   }, [firstPhotoId, location.key]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const handleResize = () => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Cleanup preload debounce timer on unmount
   useEffect(() => {
     return () => {
@@ -215,73 +254,61 @@ const PhotoGrid = memo(function PhotoGrid({
     };
   }, []);
 
-  // 使用 useMemo 创建 gridComponents，避免每次渲染都创建新实例导致 remount
-  const gridComponents = useMemo<GridComponents<PhotoGridVirtuosoContext>>(
-    () => ({
-      Scroller: GridScroller,
-      List: forwardRef<HTMLDivElement, Omit<GridListProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>>(
-        ({ style, children, context: _context, ...props }, ref) => (
-          <div
-            ref={ref}
-            {...props}
-            style={{
-              ...style,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: `${gap}px`,
-              padding: `${gap}px`,
-            }}
-          >
-            {children}
-          </div>
-        )
-      ),
-      Item: forwardRef<HTMLDivElement, Omit<GridItemProps, 'ref'> & ContextProp<PhotoGridVirtuosoContext>>(
-        ({ children, style, context: _context, ...props }, ref) => (
-          <div
-            ref={ref}
-            {...props}
-            style={{
-              ...style,
-              width: `${thumbnailSize}px`,
-              height: `${thumbnailSize}px`,
-              boxSizing: 'border-box',
-            }}
-          >
-            {children}
-          </div>
-        )
-      ),
-      Footer: GridFooter,
-    }),
-    [gap, thumbnailSize]
-  );
-
-  // 渲染单个照片 - 使用 data 模式，直接接收 photo 对象
-  const itemContent = useCallback(
-    (_index: number, photo: Photo) => {
-      if (!photo) return null;
+  // 渲染单行
+  const rowContent = useCallback(
+    (index: number) => {
+      const row = rows[index];
+      if (!row) return null;
 
       return (
-        <PhotoThumbnail
-          photo={photo}
-          size={thumbnailSize}
-          selected={selectedIds.has(photo.photoId)}
-          isScrolling={isScrolling}
-          onClick={onPhotoClick}
-          onDoubleClick={onPhotoDoubleClick}
-          onContextMenu={onPhotoContextMenu}
-          onSelect={onPhotoSelect}
-        />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${columns}, 1fr)`,
+            gap: `${gap}px`,
+            padding: `0 ${gap}px`,
+            marginBottom: `${gap}px`,
+            alignItems: 'start',
+          }}
+        >
+          {row.photos.map((photo) => {
+            const allowTallDoubleHeight = row.photos.length === 1;
+            const itemHeight =
+              allowTallDoubleHeight && photo.aspectCategory === 'tall'
+                ? thumbnailSize * 2 + gap
+                : thumbnailSize;
+
+            return (
+              <div
+                key={photo.photoId}
+                style={{
+                  gridColumn: photo.colSpan > 1 ? `span ${photo.colSpan}` : undefined,
+                  height: itemHeight,
+                  alignSelf: 'start',
+                }}
+              >
+                <PhotoThumbnail
+                  photo={photo}
+                  aspectCategory={photo.aspectCategory}
+                  selected={selectedIds.has(photo.photoId)}
+                  isScrolling={isScrolling}
+                  onClick={onPhotoClick}
+                  onDoubleClick={onPhotoDoubleClick}
+                  onContextMenu={onPhotoContextMenu}
+                  onSelect={onPhotoSelect}
+                />
+              </div>
+            );
+          })}
+        </div>
       );
     },
-    [thumbnailSize, selectedIds, isScrolling, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
+    [rows, columns, gap, thumbnailSize, selectedIds, isScrolling, onPhotoClick, onPhotoDoubleClick, onPhotoContextMenu, onPhotoSelect]
   );
 
-  // 稳定的 key 计算函数，避免用 index
   const computeItemKey = useCallback(
-    (_index: number, photo: Photo) => photo.photoId,
-    []
+    (index: number) => rows[index]?.id ?? index,
+    [rows]
   );
 
   // 加载更多
@@ -294,10 +321,9 @@ const PhotoGrid = memo(function PhotoGrid({
   const handleRangeChanged = useCallback(
     (range: ListRange) => {
       // Data prefetch logic
-      if (hasMore && !loading && onLoadMore && photos.length > 0) {
+      if (hasMore && !loading && onLoadMore && rows.length > 0) {
         const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
-        const prefetchThreshold = dataPrefetchThreshold;
-        if (endIndex >= photos.length - prefetchThreshold) {
+        if (endIndex >= rows.length - 5) {
           onLoadMore();
         }
       }
@@ -309,26 +335,26 @@ const PhotoGrid = memo(function PhotoGrid({
       preloadDebounceRef.current = setTimeout(async () => {
         if (photos.length === 0) return;
 
-        const preloadCount = thumbnailPreloadCount;
         const startIndex = typeof range?.startIndex === 'number' ? range.startIndex : 0;
         const endIndex = typeof range?.endIndex === 'number' ? range.endIndex : 0;
-        const start = Math.max(0, startIndex - preloadCount);
-        const end = Math.min(photos.length - 1, endIndex + preloadCount);
 
-        const photosToCheck = photos.slice(start, end + 1);
+        // 获取可见行范围内的所有照片
+        const visiblePhotos: Photo[] = [];
+        for (let i = Math.max(0, startIndex - 2); i <= Math.min(rows.length - 1, endIndex + 2); i++) {
+          if (rows[i]) {
+            visiblePhotos.push(...rows[i].photos);
+          }
+        }
 
-        // 先过滤掉已在内存缓存中的
-        const checkItems = photosToCheck
+        const checkItems = visiblePhotos
           .filter(p => !isThumbnailCached(p.fileHash, 'small'))
           .map(p => ({ fileHash: p.fileHash, size: 'small' as ThumbnailSize }));
 
         if (checkItems.length === 0) return;
 
         try {
-          // 批量检查磁盘缓存
           const cacheStatus = await checkThumbnailsCached(checkItems);
 
-          // 预热：已有磁盘缓存的加入内存缓存
           for (const [key, status] of cacheStatus) {
             if (status.cached && status.path) {
               const [fileHash, size] = key.split('_');
@@ -336,8 +362,7 @@ const PhotoGrid = memo(function PhotoGrid({
             }
           }
 
-          // 只 enqueue 真正没缓存的
-          const tasks = photosToCheck
+          const tasks = visiblePhotos
             .filter(p => {
               const status = cacheStatus.get(`${p.fileHash}_small`);
               return status && !status.cached;
@@ -346,8 +371,9 @@ const PhotoGrid = memo(function PhotoGrid({
               sourcePath: p.filePath,
               fileHash: p.fileHash,
               size: 'small' as const,
-              // Higher priority for items closer to visible range center
-              priority: 50 - Math.abs(idx - (end - start) / 2),
+              priority: 50 - idx,
+              width: p.width,
+              height: p.height,
             }));
 
           if (tasks.length > 0) {
@@ -358,7 +384,7 @@ const PhotoGrid = memo(function PhotoGrid({
         }
       }, 150);
     },
-    [dataPrefetchThreshold, hasMore, loading, onLoadMore, photos, thumbnailPreloadCount]
+    [hasMore, loading, onLoadMore, photos.length, rows]
   );
 
   // 空状态
@@ -391,28 +417,21 @@ const PhotoGrid = memo(function PhotoGrid({
   }
 
   return (
-    <div className="h-full w-full">
-      <VirtuosoGrid<Photo, PhotoGridVirtuosoContext>
+    <div ref={containerRef} className="h-full w-full">
+      <Virtuoso
         ref={virtuosoRef}
-        key={`grid-${location.key}-${thumbnailSize}`}
-        data={photos}
+        key={`grid-${location.key}-${thumbnailSize}-${columns}`}
+        totalCount={rows.length}
         context={virtuosoContext}
         computeItemKey={computeItemKey}
-        initialItemCount={Math.min(photos.length, 50)}
         overscan={overscanPx}
-        increaseViewportBy={increaseViewportBy}
         isScrolling={setIsScrolling}
-        listClassName={clsx('photo-grid-list', isScrolling && 'pointer-events-none')}
-        itemClassName="photo-grid-item"
-        itemContent={itemContent}
+        itemContent={rowContent}
         rangeChanged={handleRangeChanged}
         endReached={handleEndReached}
-        scrollerRef={(ref) => {
-          if (ref) {
-            (ref as HTMLElement).style.willChange = 'scroll-position';
-          }
-        }}
-        components={gridComponents}
+        components={virtuosoComponents}
+        style={{ paddingTop: gap }}
+        className={clsx(isScrolling && 'pointer-events-none')}
       />
     </div>
   );

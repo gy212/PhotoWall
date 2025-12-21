@@ -151,19 +151,20 @@ const TimelineView = memo(function TimelineView({
             style={{
               gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(thumbnailSize - 40, 120)}px, 1fr))`,
               gap: `${gap}px`,
+              alignItems: 'start',
             }}
           >
             {visiblePhotos.map((photo) => (
-              <PhotoThumbnail
-                key={photo.photoId}
-                photo={photo}
-                size={thumbnailSize - 40}
-                selected={selectedIds.has(photo.photoId)}
-                onClick={onPhotoClick}
-                onDoubleClick={onPhotoDoubleClick}
-                onContextMenu={onPhotoContextMenu}
-                onSelect={onPhotoSelect}
-              />
+              <div key={photo.photoId} style={{ aspectRatio: '1 / 1' }}>
+                <PhotoThumbnail
+                  photo={photo}
+                  selected={selectedIds.has(photo.photoId)}
+                  onClick={onPhotoClick}
+                  onDoubleClick={onPhotoDoubleClick}
+                  onContextMenu={onPhotoContextMenu}
+                  onSelect={onPhotoSelect}
+                />
+              </div>
             ))}
           </div>
 

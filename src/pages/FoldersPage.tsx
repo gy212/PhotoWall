@@ -10,6 +10,7 @@ import { PhotoGrid, PhotoViewer } from '@/components/photo';
 import { useFolderStore } from '@/stores/folderStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { usePhotoStore } from '@/stores/photoStore';
+import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
 import {
   getFolderTree,
   getFolderChildren,
@@ -553,35 +554,21 @@ function FoldersPage() {
 
             {/* 选择操作栏 */}
             {selectedIds.size > 0 && (
-              <div className="absolute top-20 left-1/2 z-50 -translate-x-1/2 flex items-center space-x-3 rounded-full bg-primary px-6 py-3 text-white shadow-xl">
-                <span className="text-sm font-semibold">
-                  已选择 {selectedIds.size} 项
-                </span>
-                <div className="h-5 w-px bg-white/30" />
-                <button
+              <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
+                <SelectionAction
+                  icon="favorite"
+                  label="收藏"
                   onClick={() => handleToggleFavorite(true)}
                   disabled={favoriting}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20 disabled:opacity-50"
                   title="添加到收藏"
-                >
-                  <span className="material-symbols-outlined text-lg">favorite</span>
-                  <span>收藏</span>
-                </button>
-                <button
+                />
+                <SelectionAction
+                  icon="delete"
+                  label="删除"
                   onClick={handleDeleteClick}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
                   title="删除"
-                >
-                  <span className="material-symbols-outlined text-lg">delete</span>
-                  <span>删除</span>
-                </button>
-                <button
-                  onClick={() => clearSelection()}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
-                >
-                  <span className="material-symbols-outlined text-lg">close</span>
-                </button>
-              </div>
+                />
+              </SelectionToolbar>
             )}
 
             <PhotoGrid

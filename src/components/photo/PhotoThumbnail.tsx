@@ -1,14 +1,14 @@
 import { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import clsx from 'clsx';
-import type { Photo } from '@/types';
+import type { Photo, AspectRatioCategory } from '@/types';
 import { useThumbnailProgressive } from '@/hooks';
 
 interface PhotoThumbnailProps {
   /** 照片数据 */
   photo: Photo;
-  /** 缩略图大小 */
-  size?: number;
+  /** 宽高比分类 */
+  aspectCategory?: AspectRatioCategory;
   /** 是否选中 */
   selected?: boolean;
   /** 是否正在滚动（滚动时延迟加载缩略图） */
@@ -28,12 +28,17 @@ const detectTauriRuntime = () => {
     return false;
   }
   const tauriWindow = window as typeof window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
-  return Boolean(tauriWindow.__TAURI__ ?? tauriWindow.__TAURI_INTERNALS__);
+  if (tauriWindow.__TAURI__) {
+    return true;
+  }
+
+  const internals = tauriWindow.__TAURI_INTERNALS__ as { invoke?: unknown } | undefined;
+  return typeof internals?.invoke === 'function';
 };
 
 const PhotoThumbnail = memo(function PhotoThumbnail({
   photo,
-  size = 200,
+  aspectCategory = 'normal',
   selected = false,
   isScrolling = false,
   onClick,
@@ -131,7 +136,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         !selected && 'hover:border-zinc-400 dark:hover:border-zinc-500 hover:shadow-sm', // 悬停加深边框
         selected && 'ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2 ring-offset-white dark:ring-offset-black border-transparent' // 选中态：黑色强边框
       )}
-      style={{ width: size, height: size }}
+      style={{ width: '100%', height: '100%' }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
@@ -146,7 +151,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={tinyUrl}
           alt=""
           className={clsx(
-            'absolute inset-0 h-full w-full object-cover transition-opacity duration-500',
+            'absolute inset-0 h-full w-full transition-opacity duration-500',
+            aspectCategory === 'normal' ? 'object-cover' : 'object-contain',
             'blur-md scale-105', // 模糊并略微放大以隐藏像素化
             tinyLoaded ? 'opacity-100' : 'opacity-0'
           )}
@@ -160,7 +166,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           src={fullImageUrl}
           alt={photo.fileName}
           className={clsx(
-            'block h-full w-full object-cover transition-all duration-500',
+            'block h-full w-full transition-all duration-500',
+            aspectCategory === 'normal' ? 'object-cover' : 'object-contain',
             fullLoaded ? 'opacity-100' : 'opacity-0'
             // !selected && 'group-hover:opacity-90' // 悬停轻微变暗
           )}

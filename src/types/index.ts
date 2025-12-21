@@ -376,3 +376,24 @@ export interface FolderStats {
   /** 根文件夹列表 */
   rootFolders: FolderNode[];
 }
+
+// ============ 宽高比分类 ============
+
+/**
+ * 宽高比分类
+ * - normal: 普通图片
+ * - wide: 超宽图（宽高比 > 2:1）
+ * - tall: 超长图（宽高比 < 1:2）
+ */
+export type AspectRatioCategory = 'normal' | 'wide' | 'tall';
+
+/**
+ * 获取图片的宽高比分类
+ */
+export function getAspectRatioCategory(width?: number, height?: number): AspectRatioCategory {
+  if (!width || !height) return 'normal';
+  const ratio = width / height;
+  if (ratio > 2) return 'wide';
+  if (ratio < 0.5) return 'tall';
+  return 'normal';
+}

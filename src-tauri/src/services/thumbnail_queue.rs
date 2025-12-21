@@ -24,6 +24,8 @@ pub struct ThumbnailReadyPayload {
     /// 占位图 Base64 编码（WebP 格式，仅占位图时有值）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placeholder_base64: Option<String>,
+    /// 是否直接使用原图（小图跳过缩略图生成）
+    pub use_original: bool,
 }
 
 /// 全局 AppHandle 存储（用于 worker 线程发送事件）
@@ -43,6 +45,7 @@ fn emit_thumbnail_ready(
     path: &str,
     is_placeholder: bool,
     placeholder_bytes: Option<&[u8]>,
+    use_original: bool,
 ) {
     if let Ok(guard) = APP_HANDLE.read() {
         if let Some(ref handle) = *guard {
@@ -56,6 +59,7 @@ fn emit_thumbnail_ready(
                 path: path.to_string(),
                 is_placeholder,
                 placeholder_base64,
+                use_original,
             };
             let _ = handle.emit("thumbnail-ready", payload);
         }
@@ -71,6 +75,8 @@ pub struct ThumbnailTask {
     pub priority: i32,
     /// 简单的序号用于稳定排序（先进先出）
     pub(crate) seq: u64,
+    /// 原图尺寸（用于小图跳过逻辑）
+    pub original_dimensions: Option<(u32, u32)>,
 }
 
 impl ThumbnailTask {
@@ -87,6 +93,30 @@ impl ThumbnailTask {
             size,
             priority,
             seq: 0,
+            original_dimensions: None,
+        }
+    }
+
+    /// 创建带原图尺寸的缩略图任务
+    pub fn with_dimensions(
+        source_path: PathBuf,
+        file_hash: String,
+        size: ThumbnailSize,
+        priority: i32,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Self {
+        let original_dimensions = match (width, height) {
+            (Some(w), Some(h)) => Some((w, h)),
+            _ => None,
+        };
+        Self {
+            source_path,
+            file_hash,
+            size,
+            priority,
+            seq: 0,
+            original_dimensions,
         }
     }
 }
@@ -191,7 +221,7 @@ impl ThumbnailQueue {
                     }
 
                     // 执行
-                    match service.get_or_generate(&task.source_path, &task.file_hash, task.size) {
+                    match service.get_or_generate(&task.source_path, &task.file_hash, task.size, task.original_dimensions) {
                         Ok(result) => {
                             // 发送 thumbnail-ready 事件
                             emit_thumbnail_ready(
@@ -200,6 +230,7 @@ impl ThumbnailQueue {
                                 &result.path.to_string_lossy(),
                                 result.is_placeholder,
                                 result.placeholder_bytes.as_deref(),
+                                result.use_original,
                             );
                         }
                         Err(e) => {
@@ -299,6 +330,7 @@ mod tests {
             size: ThumbnailSize::Small,
             priority: 10,
             seq: 0,
+            original_dimensions: None,
         });
 
         // 简单等待处理

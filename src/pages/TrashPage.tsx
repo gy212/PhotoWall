@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
+import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
 import {
   getDeletedPhotos,
   restorePhotos,
@@ -411,42 +412,30 @@ function TrashPage() {
 
         {/* 选择操作栏 */}
         {selectedIds.size > 0 && (
-          <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 flex items-center space-x-3 rounded-full bg-primary px-6 py-3 text-white shadow-xl">
-            <span className="text-sm font-semibold">
-              已选择 {selectedIds.size} 项
-            </span>
-            <div className="h-5 w-px bg-white/30" />
+          <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
             {/* 恢复按钮 */}
-            <button
+            <SelectionAction
+              icon={restoring ? "" : "restore"}
+              label="恢复"
               onClick={handleRestore}
               disabled={restoring}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20 disabled:opacity-50"
               title="恢复"
             >
-              {restoring ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <span className="material-symbols-outlined text-lg">restore</span>
+              {restoring && (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
               )}
-              <span>恢复</span>
-            </button>
-            <div className="h-5 w-px bg-white/30" />
+            </SelectionAction>
+            
+            <SelectionDivider />
+
             {/* 永久删除按钮 */}
-            <button
+            <SelectionAction
+              icon="delete_forever"
+              label="彻底删除"
               onClick={() => setShowDeleteDialog(true)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
               title="永久删除"
-            >
-              <span className="material-symbols-outlined text-lg">delete_forever</span>
-              <span>删除</span>
-            </button>
-            <button
-              onClick={() => clearSelection()}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-white/20"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-          </div>
+            />
+          </SelectionToolbar>
         )}
 
         {/* 照片网格 */}

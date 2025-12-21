@@ -59,6 +59,10 @@ impl ThumbnailSize {
     }
 }
 
+/// 小图像素阈值（低于此值直接使用原图，不生成缩略图）
+/// 200 万像素 = 约 1600x1250 或 1920x1040
+pub const SMALL_IMAGE_PIXEL_THRESHOLD: u64 = 2_000_000;
+
 /// 缩略图生成结果
 #[derive(Debug, Clone)]
 pub struct ThumbnailResult {
@@ -72,6 +76,8 @@ pub struct ThumbnailResult {
     pub is_placeholder: bool,
     /// 占位图字节数据（WebP 格式，仅占位图时有值）
     pub placeholder_bytes: Option<Vec<u8>>,
+    /// 是否直接使用原图（小图跳过缩略图生成）
+    pub use_original: bool,
 }
 
 /// 正在生成中的缩略图追踪（用于去重）
@@ -164,12 +170,35 @@ impl ThumbnailService {
     ///
     /// 如果缓存中存在，直接返回缓存路径；否则生成新的缩略图
     /// 使用去重机制确保同一张图 + 同一尺寸在同一时间只生成一次
+    ///
+    /// # 小图跳过逻辑
+    /// 如果提供了 `original_dimensions` 且像素数 < 200 万，直接返回原图路径
     pub fn get_or_generate(
         &self,
         source_path: &Path,
         file_hash: &str,
         size: ThumbnailSize,
+        original_dimensions: Option<(u32, u32)>,
     ) -> AppResult<ThumbnailResult> {
+        // 小图跳过逻辑：低于 200 万像素直接使用原图
+        if let Some((w, h)) = original_dimensions {
+            let pixels = w as u64 * h as u64;
+            if pixels < SMALL_IMAGE_PIXEL_THRESHOLD {
+                tracing::debug!(
+                    "小图跳过缩略图生成: {:?} ({}x{} = {} pixels < {} threshold)",
+                    source_path, w, h, pixels, SMALL_IMAGE_PIXEL_THRESHOLD
+                );
+                return Ok(ThumbnailResult {
+                    path: source_path.to_path_buf(),
+                    hit_cache: false,
+                    generation_time_ms: None,
+                    is_placeholder: false,
+                    placeholder_bytes: None,
+                    use_original: true,
+                });
+            }
+        }
+
         let cache_path = self.get_cache_path(file_hash, size);
 
         // 检查缓存
@@ -181,6 +210,7 @@ impl ThumbnailService {
                 generation_time_ms: None,
                 is_placeholder: false,
                 placeholder_bytes: None,
+                use_original: false,
             });
         }
 
@@ -201,6 +231,7 @@ impl ThumbnailService {
                         generation_time_ms: None,
                         is_placeholder: false,
                         placeholder_bytes: None,
+                        use_original: false,
                     });
                 }
             }
@@ -236,6 +267,7 @@ impl ThumbnailService {
                     generation_time_ms: Some(elapsed),
                     is_placeholder: false,
                     placeholder_bytes: None,
+                    use_original: false,
                 })
             }
             Err(AppError::PlaceholderGenerated(bytes)) => {
@@ -251,6 +283,7 @@ impl ThumbnailService {
                     generation_time_ms: Some(elapsed),
                     is_placeholder: true,
                     placeholder_bytes: Some(bytes),
+                    use_original: false,
                 })
             }
             Err(e) => Err(e),
@@ -924,14 +957,14 @@ impl ThumbnailService {
     /// 批量生成缩略图
     pub fn generate_batch(
         &self,
-        items: &[(PathBuf, String)], // (source_path, file_hash)
+        items: &[(PathBuf, String, Option<(u32, u32)>)], // (source_path, file_hash, dimensions)
         size: ThumbnailSize,
     ) -> Vec<AppResult<ThumbnailResult>> {
         use rayon::prelude::*;
 
         items
             .par_iter()
-            .map(|(path, hash)| self.get_or_generate(path, hash, size))
+            .map(|(path, hash, dims)| self.get_or_generate(path, hash, size, *dims))
             .collect()
     }
 
@@ -1069,21 +1102,50 @@ mod tests {
         // 创建服务
         let service = ThumbnailService::new(cache_dir.clone()).unwrap();
 
-        // 生成缩略图
+        // 生成缩略图（传入 None 表示不跳过）
         let result = service
-            .get_or_generate(&source_path, "testhash123", ThumbnailSize::Small)
+            .get_or_generate(&source_path, "testhash123", ThumbnailSize::Small, None)
             .unwrap();
 
         assert!(!result.hit_cache);
         assert!(result.path.exists());
         assert!(result.generation_time_ms.is_some());
+        assert!(!result.use_original);
 
         // 再次获取应该命中缓存
         let result2 = service
-            .get_or_generate(&source_path, "testhash123", ThumbnailSize::Small)
+            .get_or_generate(&source_path, "testhash123", ThumbnailSize::Small, None)
             .unwrap();
 
         assert!(result2.hit_cache);
+    }
+
+    #[test]
+    fn test_small_image_skip() {
+        let temp_dir = TempDir::new().unwrap();
+        let cache_dir = temp_dir.path().join("cache");
+        let source_path = temp_dir.path().join("small.jpg");
+
+        // 创建测试图片
+        create_test_image(&source_path);
+
+        // 创建服务
+        let service = ThumbnailService::new(cache_dir.clone()).unwrap();
+
+        // 小图（100x100 = 10000 像素 < 200万）应该跳过缩略图生成
+        let result = service
+            .get_or_generate(&source_path, "smallhash", ThumbnailSize::Small, Some((100, 100)))
+            .unwrap();
+
+        assert!(result.use_original);
+        assert_eq!(result.path, source_path);
+
+        // 大图（2000x2000 = 400万像素 > 200万）应该生成缩略图
+        let result2 = service
+            .get_or_generate(&source_path, "largehash", ThumbnailSize::Small, Some((2000, 2000)))
+            .unwrap();
+
+        assert!(!result2.use_original);
     }
 
     #[test]
