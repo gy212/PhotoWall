@@ -60,7 +60,9 @@ fn apply_windows_effects(window: &WebviewWindow, settings: &WindowSettings) {
     // 使用 transparency 参数 (0-100)
     // 0 = 不透明 (alpha=240), 100 = 高度透明 (alpha=20)
     let transparency = settings.transparency.min(100);
-    let alpha = (240.0 - (transparency as f64 * 2.2)).round().clamp(20.0, 240.0) as u8;
+    let alpha = (240.0 - (transparency as f64 * 2.2))
+        .round()
+        .clamp(20.0, 240.0) as u8;
 
     // 固定深色 tint 颜色
     let tint = (15, 23, 42, alpha);
@@ -75,6 +77,11 @@ fn apply_macos_effects(window: &WebviewWindow, settings: &WindowSettings) {
 
     // macOS 使用 transparency 作为模糊强度
     let transparency = settings.transparency.min(100) as f64;
-    let radius = if transparency <= 0.0 { None } else { Some(transparency / 2.0) };
+    let radius = if transparency <= 0.0 {
+        None
+    } else {
+        Some(transparency / 2.0)
+    };
+
     let _ = apply_vibrancy(window, NSVisualEffectMaterial::HudWindow, None, radius);
 }

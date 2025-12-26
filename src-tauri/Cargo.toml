@@ -1,7 +1,7 @@
 [package]
 name = "photowall"
 version = "0.1.0"
-description = "PhotoWall - Windows照片管理软件"
+description = "PhotoWall - Windows 照片管理软件"
 authors = ["PhotoWall Team"]
 edition = "2021"
 
@@ -21,7 +21,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
-window-vibrancy = "0.5"
+window-vibrancy = "0.6"
 
 # 序列化
 serde = { version = "1", features = ["derive"] }
@@ -46,7 +46,7 @@ kamadak-exif = "0.6"
 walkdir = "2"
 notify = "7"
 
-# 正则表达式 (解析文件名中的日期)
+# 正则表达式（解析文件名中的日期）
 regex = "1"
 
 # 并行处理
@@ -83,4 +83,3 @@ base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"
-
