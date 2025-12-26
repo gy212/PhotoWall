@@ -329,6 +329,13 @@ export interface PerformanceSettings {
   enableWal: boolean;
 }
 
+export interface WindowSettings {
+  /** 窗口背景不透明度 (0.0 - 1.0) */
+  opacity: number;
+  /** 窗口透明度 (0-100) */
+  transparency: number;
+}
+
 /**
  * 应用程序设置
  */
@@ -343,6 +350,8 @@ export interface AppSettings {
   thumbnail: ThumbnailSettings;
   /** 性能设置 */
   performance: PerformanceSettings;
+  /** 窗口设置 */
+  window: WindowSettings;
 }
 
 // ============ 文件夹视图类型 ============

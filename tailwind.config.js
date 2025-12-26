@@ -20,6 +20,15 @@ export default {
           100: '#e5f2ff',
           900: '#005ec4',
         },
+        // 新UI设计强调色
+        accent: {
+          DEFAULT: '#7DA0C0',
+          hover: '#93B2CE',
+          bg: 'rgba(125, 160, 192, 0.15)'
+        },
+        navy: {
+          900: '#0f172a',
+        },
         // 背景色
         background: {
           DEFAULT: 'var(--bg-base)',

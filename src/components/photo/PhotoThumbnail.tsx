@@ -61,8 +61,9 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     photo.fileHash,
     {
       size: targetThumbnailSize,
-      // 滚动时完全禁用加载，停止滚动后才开始
-      enabled: isTauriRuntime && !isScrolling,
+      // 始终启用，但滚动时暂停新请求（保留已缓存结果）
+      enabled: isTauriRuntime,
+      suspendNewRequests: isScrolling,
       // 滚动时防抖：快速划过的条目通常会在延迟内卸载，从而避免发起后端生成请求
       loadDelay: 80,
     }
@@ -121,10 +122,10 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   const hasError = isTauriRuntime ? Boolean(thumbnailError) || localError : localError;
   const isLoading = isTauriRuntime
     ? !hasError &&
-      !showTiny &&
-      (isLoadingFull ||
-        (!fullUrl && !thumbnailError && !tinyUrl) ||
-        (Boolean(fullImageUrl) && !fullLoaded))
+    !showTiny &&
+    (isLoadingFull ||
+      (!fullUrl && !thumbnailError && !tinyUrl) ||
+      (Boolean(fullImageUrl) && !fullLoaded))
     : false;
 
   return (
@@ -199,8 +200,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       <div
         className={clsx(
           'absolute top-2 left-2 z-10 transition-all duration-200',
-          selected 
-            ? 'opacity-100 scale-100' 
+          selected
+            ? 'opacity-100 scale-100'
             : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'
         )}
         onClick={handleSelectToggle}
@@ -208,15 +209,15 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         <div
           className={clsx(
             'flex h-5 w-5 items-center justify-center rounded-full transition-all shadow-sm',
-            selected 
-              ? 'bg-zinc-900 text-white shadow-md dark:bg-zinc-100 dark:text-zinc-900' 
+            selected
+              ? 'bg-zinc-900 text-white shadow-md dark:bg-zinc-100 dark:text-zinc-900'
               : 'bg-white/90 border border-zinc-200 hover:border-zinc-400 text-transparent hover:text-zinc-300'
           )}
         >
           {selected ? (
             <span className="material-symbols-outlined text-[14px] font-bold">check</span>
           ) : (
-             <span className="material-symbols-outlined text-[14px]">check</span>
+            <span className="material-symbols-outlined text-[14px]">check</span>
           )}
         </div>
       </div>
@@ -232,7 +233,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       {photo.isFavorite && (
         <div className="absolute top-2 right-2 z-10">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 backdrop-blur-md shadow-sm">
-             <span className="material-symbols-outlined text-[14px] text-white fill-current drop-shadow-md">favorite</span>
+            <span className="material-symbols-outlined text-[14px] text-white fill-current drop-shadow-md">favorite</span>
           </div>
         </div>
       )}

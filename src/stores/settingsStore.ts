@@ -1,7 +1,7 @@
 /**
  * 设置状态管理
- * 
- * 注意：主题状态由 useTheme hook 统一管理，请使用 @/hooks/useTheme
+ *
+ * 注意：主题已固定为深色，不再支持切换
  */
 
 import { create } from 'zustand';
@@ -23,6 +23,11 @@ interface SettingsState {
   /** 启动时自动扫描 */
   autoScanOnStart: boolean;
 
+  /** 窗口背景不透明度 - 保留兼容性 */
+  windowOpacity: number;
+  /** 窗口透明度 (0-100)，0=不透明，100=高度透明 */
+  windowTransparency: number;
+
   // Actions
   setLanguage: (language: 'zh-CN' | 'en-US') => void;
   addWatchedFolder: (path: string) => void;
@@ -32,6 +37,8 @@ interface SettingsState {
   setAutoCleanupCache: (enabled: boolean) => void;
   setWorkerThreads: (threads: number) => void;
   setAutoScanOnStart: (enabled: boolean) => void;
+  setWindowOpacity: (opacity: number) => void;
+  setWindowTransparency: (transparency: number) => void;
   resetToDefaults: () => void;
 }
 
@@ -43,6 +50,8 @@ const defaultSettings = {
   autoCleanupCache: true,
   workerThreads: 4,
   autoScanOnStart: false,
+  windowOpacity: 0.3,
+  windowTransparency: 30,
 };
 
 export const useSettingsStore = create<SettingsState>()(persist(
@@ -66,6 +75,8 @@ export const useSettingsStore = create<SettingsState>()(persist(
     setAutoCleanupCache: (autoCleanupCache) => set({ autoCleanupCache }),
     setWorkerThreads: (workerThreads) => set({ workerThreads }),
     setAutoScanOnStart: (autoScanOnStart) => set({ autoScanOnStart }),
+    setWindowOpacity: (windowOpacity) => set({ windowOpacity }),
+    setWindowTransparency: (windowTransparency) => set({ windowTransparency }),
 
     resetToDefaults: () => set(defaultSettings),
   }),

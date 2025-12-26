@@ -136,6 +136,7 @@ function Sidebar() {
 
   const getActiveItem = () => {
     const path = location.pathname;
+
     if (path === '/albums') return 'albums';
     if (path === '/tags') return 'tags';
     if (path === '/folders') return 'folders';
@@ -216,7 +217,7 @@ function Sidebar() {
       {/* 底部设置 */}
       <div className="space-y-1 pb-1">
         <button
-          onClick={() => navigate('/settings')}
+          onClick={() => handleNavigation({ id: 'settings', label: '设置', iconName: 'settings', path: '/settings' })}
           className={clsx(
             "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-all duration-200 ease-out outline-none select-none",
             activeItem === 'settings'

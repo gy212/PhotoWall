@@ -11,8 +11,8 @@ import {
   indexDirectories,
 } from '@/services/api';
 import type { SyncFolder } from '@/services/api';
-import { useTheme } from '@/hooks/useTheme';
-import type { AppSettings, ThemeMode } from '@/types';
+import type { AppSettings } from '@/types';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 // 设置分类配置 - 使用Material Symbols图标
 const settingsSections = [
@@ -24,15 +24,23 @@ const settingsSections = [
 ];
 
 function SettingsPage() {
-  const { theme: currentTheme, setTheme } = useTheme();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [syncFolders, setSyncFolders] = useState<SyncFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [scanIntervalOpen, setScanIntervalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeSection, setActiveSection] = useState('sync');
-  
+
+  // Store actions
+  const {
+    windowOpacity,
+    windowTransparency,
+    setWindowOpacity,
+    setWindowTransparency
+  } = useSettingsStore();
+
   // 各区块的 ref
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -46,7 +54,7 @@ function SettingsPage() {
     const handleScroll = (e: Event) => {
       const container = e.target as HTMLElement;
       const scrollTop = container.scrollTop;
-      
+
       let currentSection = 'sync';
       for (const section of settingsSections) {
         const el = sectionRefs.current[section.id];
@@ -79,9 +87,13 @@ function SettingsPage() {
   const loadSettings = async () => {
     try {
       const data = await getSettings();
-      // 使用前端 useTheme 的主题状态，而非后端保存的主题
-      // 因为 useTheme 通过 localStorage 持久化，是实时的主题状态
-      setSettings({ ...data, theme: currentTheme });
+      setSettings(data);
+
+      // 同步 Store 中的外观设置
+      if (data.window) {
+        setWindowOpacity(data.window.opacity);
+        setWindowTransparency(data.window.transparency ?? 30);
+      }
     } catch (err) {
       showMessage('error', `加载设置失败: ${err}`);
     } finally {
@@ -107,7 +119,15 @@ function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      await saveSettings(settings);
+      // 构造包含窗口设置的完整设置对象
+      const settingsToSave = {
+        ...settings,
+        window: {
+          opacity: windowOpacity,
+          transparency: windowTransparency
+        }
+      };
+      await saveSettings(settingsToSave);
       showMessage('success', '设置已保存');
     } catch (err) {
       showMessage('error', `保存失败: ${err}`);
@@ -122,25 +142,15 @@ function SettingsPage() {
     try {
       const defaults = await resetSettings();
       setSettings(defaults);
-      setTheme(defaults.theme);
+      if (defaults.window) {
+        setWindowOpacity(defaults.window.opacity);
+        setWindowTransparency(defaults.window.transparency ?? 30);
+      }
       showMessage('success', '设置已重置为默认值');
     } catch (err) {
       showMessage('error', `重置失败: ${err}`);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleThemeChange = async (theme: ThemeMode) => {
-    if (!settings) return;
-    const newSettings = { ...settings, theme };
-    setSettings(newSettings);
-    setTheme(theme);
-    // 立即保存主题到后端，确保同步
-    try {
-      await saveSettings(newSettings);
-    } catch (err) {
-      console.error('保存主题设置失败:', err);
     }
   };
 
@@ -196,9 +206,9 @@ function SettingsPage() {
 
   if (loading || !settings) {
     return (
-      <div className="flex h-full items-center justify-center bg-surface rounded-xl">
-        <div className="text-center text-on-surface-variant">
-          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+      <div className="flex h-full items-center justify-center glass-panel rounded-xl">
+        <div className="text-center text-white/70">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-400 border-t-transparent mx-auto" />
           <p>加载中...</p>
         </div>
       </div>
@@ -206,7 +216,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="h-full bg-surface rounded-xl flex flex-col overflow-hidden">
+    <div className="h-full glass-panel rounded-xl flex flex-col overflow-hidden text-white/90">
       {message && (
         <div
           className={clsx(
@@ -222,8 +232,8 @@ function SettingsPage() {
 
       {/* 页面头部 */}
       <div className="p-6 pb-0">
-        <h2 className="text-4xl font-black leading-tight tracking-tight text-on-surface">设置</h2>
-        <p className="pt-1 text-base font-normal leading-normal text-on-surface-variant">
+        <h2 className="text-4xl font-black leading-tight tracking-tight text-white">设置</h2>
+        <p className="pt-1 text-base font-normal leading-normal text-white/60">
           管理您的应用程序设置和偏好。
         </p>
       </div>
@@ -241,8 +251,8 @@ function SettingsPage() {
                 className={clsx(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left',
                   activeSection === section.id
-                    ? 'bg-button text-on-surface'
-                    : 'text-on-surface-variant hover:bg-button/60'
+                    ? 'bg-blue-500/20 text-white shadow-[0_0_15px_rgba(59,130,246,0.15)] border border-blue-400/30'
+                    : 'text-white/60 hover:bg-white/10 hover:text-white'
                 )}
               >
                 <span className="material-symbols-outlined text-xl">{section.icon}</span>
@@ -256,14 +266,14 @@ function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full btn btn-primary h-10"
+              className="w-full py-2 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-500/20"
             >
               {saving ? '保存中...' : '保存设置'}
             </button>
             <button
               onClick={handleReset}
               disabled={saving}
-              className="w-full btn btn-secondary h-10"
+              className="w-full py-2 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
             >
               恢复默认设置
             </button>
@@ -274,13 +284,13 @@ function SettingsPage() {
         <main id="settings-content" className="flex-1 h-full min-h-0 overflow-y-auto pr-2">
           <div className="max-w-4xl space-y-6">
             {/* Folder Sync */}
-            <section 
+            <section
               ref={(el) => { sectionRefs.current['sync'] = el; }}
-              className="card p-6"
+              className="glass-card p-6 rounded-2xl"
             >
-              <h3 className="text-lg font-semibold text-on-surface">文件夹同步</h3>
-              <p className="text-sm text-on-surface-variant mb-4">管理自动扫描新照片的文件夹。</p>
-              
+              <h3 className="text-lg font-semibold text-white">文件夹同步</h3>
+              <p className="text-sm text-white/50 mb-4">管理自动扫描新照片的文件夹。</p>
+
               {/* 同步文件夹列表 */}
               <div className="flex flex-col gap-3">
                 {syncFolders.length === 0 ? (
@@ -293,10 +303,10 @@ function SettingsPage() {
                     <div
                       key={folder.path}
                       className={clsx(
-                        'group flex items-center justify-between gap-4 rounded-xl p-4 transition-all',
+                        'group flex items-center justify-between gap-4 rounded-xl p-4 transition-all border',
                         folder.isValid
-                          ? 'bg-button hover:bg-outline/40'
-                          : 'bg-red-50 dark:bg-red-900/20'
+                          ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                          : 'bg-red-500/10 border-red-500/20 text-red-100'
                       )}
                     >
                       <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -336,7 +346,7 @@ function SettingsPage() {
                   <span className="material-symbols-outlined text-xl">add</span>
                   <span>添加文件夹</span>
                 </button>
-                
+
                 {syncFolders.length > 0 && (
                   <button
                     type="button"
@@ -360,57 +370,64 @@ function SettingsPage() {
               </div>
             </section>
 
-            {/* Appearance */}
-            <section 
+            <section
               ref={(el) => { sectionRefs.current['appearance'] = el; }}
-              className="card p-6"
+              className="glass-card p-6 rounded-2xl"
             >
-              <h3 className="text-lg font-semibold text-on-surface">外观</h3>
-              <p className="text-sm text-on-surface-variant mb-4">选择应用程序的外观。系统模式将跟随您的操作系统设置。</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {(['light', 'dark', 'system'] as ThemeMode[]).map((theme) => (
-                  <button
-                    key={theme}
-                    type="button"
-                    onClick={() => handleThemeChange(theme)}
-                    className={clsx(
-                      'flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-colors',
-                      currentTheme === theme
-                        ? 'border-primary'
-                        : 'border-transparent hover:border-outline'
-                    )}
-                  >
-                    <div className={clsx(
-                      'h-16 w-full rounded-lg border shadow-inner',
-                      theme === 'light' && 'border-outline/40 bg-white',
-                      theme === 'dark' && 'border-gray-700 bg-gray-900',
-                      theme === 'system' && 'border-outline/40 bg-gradient-to-br from-white from-50% to-gray-900 to-50%'
-                    )}></div>
-                    <span className={clsx(
-                      'font-medium',
-                      currentTheme === theme ? 'text-primary' : 'text-on-surface-variant'
-                    )}>
-                      {theme === 'light' ? '浅色' : theme === 'dark' ? '深色' : '跟随系统'}
-                    </span>
-                  </button>
-                ))}
+              <h3 className="text-lg font-semibold text-white">外观</h3>
+              <p className="text-sm text-white/50 mb-4">调整窗口背景效果。</p>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* 不透明度滑块 */}
+                <div>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-sm text-white/80">背景不透明度</label>
+                    <span className="text-xs text-white/50">{Math.round(windowOpacity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={windowOpacity * 100}
+                    onChange={(e) => setWindowOpacity(parseInt(e.target.value) / 100)}
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                  />
+                </div>
+
+                {/* 窗口透明度滑块 */}
+                <div>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-sm text-white/80">窗口透明度</label>
+                    <span className="text-xs text-white/50">{windowTransparency}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={windowTransparency}
+                    onChange={(e) => setWindowTransparency(parseInt(e.target.value))}
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                  />
+                </div>
               </div>
             </section>
 
             {/* Photo Scanning */}
-            <section 
+            <section
               ref={(el) => { sectionRefs.current['scan'] = el; }}
-              className="card overflow-hidden"
+              className="card"
             >
               <div className="p-6 pb-2">
                 <h3 className="text-lg font-semibold text-on-surface">照片扫描</h3>
                 <p className="text-sm text-on-surface-variant">配置应用程序如何查找和处理您的照片。</p>
               </div>
-              <div className="divide-y divide-outline/30">
+              <div className="divide-y divide-white/5">
                 <div className="flex items-center justify-between p-4 pl-6">
                   <div>
-                    <p className="font-medium text-on-surface">启动时扫描新照片</p>
-                    <p className="text-sm text-on-surface-variant">应用打开时自动检查同步文件夹。</p>
+                    <p className="font-medium text-white/90">自动扫描</p>
+                    <p className="text-sm text-white/50">定期自动检查同步文件夹中的新照片。</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -427,10 +444,64 @@ function SettingsPage() {
                     <div className="peer h-6 w-11 rounded-full bg-button after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-outline/30 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20"></div>
                   </label>
                 </div>
+                {settings.scan.autoScan && (
+                  <div className="flex items-center justify-between p-4 pl-6">
+                    <div>
+                      <p className="font-medium text-white/90">扫描间隔</p>
+                      <p className="text-sm text-white/50">自动扫描的时间间隔（分钟）。</p>
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setScanIntervalOpen(!scanIntervalOpen)}
+                        className="flex items-center gap-2 rounded-lg bg-button px-3 py-2 text-sm text-white/90 border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        {settings.scan.scanInterval / 60 >= 60
+                          ? `${settings.scan.scanInterval / 3600} 小时`
+                          : `${settings.scan.scanInterval / 60} 分钟`}
+                        <span className={clsx("material-symbols-outlined text-base transition-transform", scanIntervalOpen && "rotate-180")}>
+                          expand_more
+                        </span>
+                      </button>
+                      {scanIntervalOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg bg-zinc-800 border border-white/10 shadow-xl overflow-hidden">
+                          {[
+                            { value: 5, label: '5 分钟' },
+                            { value: 10, label: '10 分钟' },
+                            { value: 15, label: '15 分钟' },
+                            { value: 30, label: '30 分钟' },
+                            { value: 60, label: '1 小时' },
+                            { value: 120, label: '2 小时' },
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setSettings({
+                                  ...settings,
+                                  scan: { ...settings.scan, scanInterval: option.value * 60 },
+                                });
+                                setScanIntervalOpen(false);
+                              }}
+                              className={clsx(
+                                "w-full px-4 py-2 text-sm text-left hover:bg-white/10 transition-colors",
+                                settings.scan.scanInterval / 60 === option.value
+                                  ? "text-primary bg-primary/10"
+                                  : "text-white"
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center justify-between p-4 pl-6">
                   <div>
-                    <p className="font-medium text-on-surface">递归扫描子文件夹</p>
-                    <p className="text-sm text-on-surface-variant">扫描时包含所有嵌套文件夹。</p>
+                    <p className="font-medium text-white/90">递归扫描子文件夹</p>
+                    <p className="text-sm text-white/50">扫描时包含所有嵌套文件夹。</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -450,20 +521,19 @@ function SettingsPage() {
               </div>
             </section>
 
-            {/* Thumbnails */}
-            <section 
+            <section
               ref={(el) => { sectionRefs.current['thumbnail'] = el; }}
-              className="card p-6"
+              className="glass-card p-6 rounded-2xl"
             >
-              <h3 className="text-lg font-semibold text-on-surface">缩略图</h3>
-              <p className="text-sm text-on-surface-variant mb-6">配置缩略图生成和缓存设置。</p>
+              <h3 className="text-lg font-semibold text-white">缩略图</h3>
+              <p className="text-sm text-white/50 mb-6">配置缩略图生成和缓存设置。</p>
               <div className="flex flex-col gap-6">
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <label className="font-medium text-on-surface">缓存大小限制</label>
-                    <span className="text-sm text-on-surface-variant">{settings.thumbnail.cacheSizeMb} MB</span>
+                    <label className="font-medium text-white/90">缓存大小限制</label>
+                    <span className="text-sm text-white/50">{settings.thumbnail.cacheSizeMb} MB</span>
                   </div>
-                  <p className="text-sm text-on-surface-variant mb-3">较大的缓存可以加快浏览速度，但会占用更多磁盘空间。</p>
+                  <p className="text-sm text-white/50 mb-3">较大的缓存可以加快浏览速度，但会占用更多磁盘空间。</p>
                   <input
                     type="range"
                     min="100"
@@ -503,20 +573,19 @@ function SettingsPage() {
               </div>
             </section>
 
-            {/* Performance */}
-            <section 
+            <section
               ref={(el) => { sectionRefs.current['performance'] = el; }}
-              className="card p-6"
+              className="glass-card p-6 rounded-2xl"
             >
-              <h3 className="text-lg font-semibold text-on-surface">性能</h3>
-              <p className="text-sm text-on-surface-variant mb-6">调整设置以优化应用程序的速度和资源使用。</p>
+              <h3 className="text-lg font-semibold text-white">性能</h3>
+              <p className="text-sm text-white/50 mb-6">调整设置以优化应用程序的速度和资源使用。</p>
               <div className="flex flex-col gap-6">
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <label className="font-medium text-on-surface">扫描线程数</label>
-                    <span className="text-sm text-on-surface-variant">{settings.performance.scanThreads === 0 ? '自动' : settings.performance.scanThreads}</span>
+                    <label className="font-medium text-white/90">扫描线程数</label>
+                    <span className="text-sm text-white/50">{settings.performance.scanThreads === 0 ? '自动' : settings.performance.scanThreads}</span>
                   </div>
-                  <p className="text-sm text-on-surface-variant mb-3">用于扫描照片的线程数。设置为 0 则自动设置。</p>
+                  <p className="text-sm text-white/50 mb-3">用于扫描照片的线程数。设置为 0 则自动设置。</p>
                   <input
                     type="range"
                     min="0"

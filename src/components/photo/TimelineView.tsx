@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
 import PhotoThumbnail from './PhotoThumbnail';
 import type { Photo } from '@/types';
+import { groupByDate } from '@/utils/dateGrouping';
 
 const INITIAL_PHOTOS_PER_GROUP = 50;
 const PHOTOS_LOAD_MORE_COUNT = 50;
@@ -21,32 +22,6 @@ interface TimelineViewProps {
   onPhotoSelect?: (photo: Photo, selected: boolean) => void;
   onLoadMore?: () => void;
 }
-
-const formatDate = (dateStr: string): string => {
-  if (dateStr === 'unknown') return '未知日期';
-
-  const date = new Date(dateStr);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) {
-    return '今天';
-  }
-
-  if (date.toDateString() === yesterday.toDateString()) {
-    return '昨天';
-  }
-
-  const weekAgo = new Date(today);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  if (date > weekAgo) {
-    const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-    return days[date.getDay()];
-  }
-
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
-};
 
 const TimelineView = memo(function TimelineView({
   photos,
@@ -88,27 +63,14 @@ const TimelineView = memo(function TimelineView({
     return () => cancelAnimationFrame(rafId);
   }, [firstPhotoId, location.key]);
 
-  // Group photos by date
+  // Group photos by date using shared utility
   const dateGroups = useMemo(() => {
-    const groups = new Map<string, Photo[]>();
-
-    photos.forEach((photo) => {
-      const date = photo.dateTaken || photo.dateAdded;
-      const dateKey = date ? new Date(date).toISOString().split('T')[0] : 'unknown';
-
-      if (!groups.has(dateKey)) {
-        groups.set(dateKey, []);
-      }
-      groups.get(dateKey)!.push(photo);
-    });
-
-    return Array.from(groups.entries())
-      .map(([date, items]) => ({
-        date,
-        displayDate: formatDate(date),
-        photos: items,
-      }))
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const groups = groupByDate(photos, (photo) => photo.dateTaken || photo.dateAdded);
+    return groups.map((g) => ({
+      date: g.date,
+      displayDate: g.displayDate,
+      photos: g.items,
+    }));
   }, [photos]);
 
   const renderDateGroup = useCallback(
@@ -141,7 +103,7 @@ const TimelineView = memo(function TimelineView({
                   {group.photos.length} 张
                 </span>
               </div>
-              
+
               {/* 可选：以后可以在这里添加"全选当"按钮 */}
             </div>
           </div>

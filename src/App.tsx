@@ -36,6 +36,7 @@ function App() {
             <Route path="trash" element={<TrashPage />} />
             <Route path="folders" element={<FoldersPage />} />
           </Route>
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
-import { invoke } from '@tauri-apps/api/core';
-import Sidebar from '../sidebar/Sidebar';
-import StatusBar from './StatusBar';
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import AppHeader from './AppHeader';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 /**
- * 主布局组件 - 新UI设计
+ * 主布局组件 - 深色玻璃风格
  */
 function Layout() {
   const warmCacheTriggered = useRef(false);
+  const applyWindowAppearanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tauri = isTauri();
 
   // 启动后延迟触发暖缓存
   useEffect(() => {
@@ -25,32 +27,50 @@ function Layout() {
           console.debug(`[暖缓存] 已入队 ${result.queued} 个任务，${result.alreadyCached} 个已有缓存`);
         }
       } catch (err) {
-        // 暖缓存失败不影响正常使用
         console.debug('[暖缓存] 失败:', err);
       }
-    }, 2000); // 启动后 2 秒
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
 
-  return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background p-1.5 gap-1.5 transition-colors duration-300">
-      {/* 侧边栏 Island */}
-      <aside className="flex h-full w-64 flex-shrink-0 flex-col rounded-xl bg-sidebar/50 shadow-sm backdrop-blur-2xl overflow-hidden transition-all duration-300">
-        <Sidebar />
-      </aside>
+  // 从 Store 获取外观设置
+  const { windowOpacity, windowTransparency } = useSettingsStore();
 
-      {/* 主内容区 Island */}
-      <main className="flex-1 flex flex-col h-full min-w-0 rounded-xl bg-surface shadow-sm overflow-hidden relative transition-all duration-300">
-        {/* 主内容区域 */}
-        <div className="flex-1 min-h-0 overflow-hidden relative">
+  // 将外观设置同步到原生窗口效果（Tauri 桌面端）
+  useEffect(() => {
+    if (!tauri) return;
+
+    if (applyWindowAppearanceTimer.current) {
+      clearTimeout(applyWindowAppearanceTimer.current);
+    }
+
+    applyWindowAppearanceTimer.current = setTimeout(() => {
+      void invoke('apply_window_settings', {
+        settings: {
+          opacity: windowOpacity,
+          transparency: windowTransparency,
+        },
+      }).catch((err) => {
+        console.debug('[window] apply_window_settings failed:', err);
+      });
+    }, 80);
+
+    return () => {
+      if (applyWindowAppearanceTimer.current) {
+        clearTimeout(applyWindowAppearanceTimer.current);
+        applyWindowAppearanceTimer.current = null;
+      }
+    };
+  }, [tauri, windowOpacity, windowTransparency]);
+
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden native-glass-panel text-white/90 font-sans">
+      <AppHeader />
+      <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
           <Outlet />
         </div>
-
-        {/* 底部状态栏 */}
-        <footer className="h-8 flex-shrink-0 px-4 flex items-center text-xs font-medium text-text-tertiary bg-surface/50 backdrop-blur-sm">
-          <StatusBar />
-        </footer>
       </main>
     </div>
   );

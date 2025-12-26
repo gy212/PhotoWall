@@ -8,10 +8,12 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { enqueueThumbnails, isThumbnailCached, checkThumbnailsCached, addToCacheExternal, type ThumbnailSize } from '@/hooks';
 import type { Photo } from '@/types';
 import { getAspectRatioCategory, type AspectRatioCategory } from '@/types';
+import { groupByDate, type DateGroup } from '@/utils/dateGrouping';
 
 interface PhotoWithLayout extends Photo {
   aspectCategory: AspectRatioCategory;
   colSpan: number;
+  rowSpan: number;
 }
 
 interface GridRow {
@@ -113,6 +115,10 @@ interface PhotoGridProps {
   onPhotoContextMenu?: (photo: Photo, event: MouseEvent) => void;
   onPhotoSelect?: (photo: Photo, selected: boolean) => void;
   onLoadMore?: () => void;
+  /** 是否按日期分组显示 */
+  groupByDateEnabled?: boolean;
+  /** 嵌入模式：禁用内部滚动，融入父容器滚动流 */
+  embedded?: boolean;
 }
 
 /**
@@ -130,6 +136,8 @@ const PhotoGrid = memo(function PhotoGrid({
   onPhotoContextMenu,
   onPhotoSelect,
   onLoadMore,
+  groupByDateEnabled = false,
+  embedded = false,
 }: PhotoGridProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const location = useLocation();
@@ -141,6 +149,7 @@ const PhotoGrid = memo(function PhotoGrid({
   const virtuosoComponents = useMemo(() => ({ Scroller: GridScroller, Footer: GridFooter }), []);
   const preloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1024);
 
   // 计算列数
@@ -167,21 +176,14 @@ const PhotoGrid = memo(function PhotoGrid({
     for (const photo of photos) {
       const aspectCategory = getAspectRatioCategory(photo.width, photo.height);
       const colSpan = aspectCategory === 'wide' ? Math.min(2, columns) : 1;
+      const rowSpan = aspectCategory === 'tall' ? 2 : 1;
 
       const photoWithLayout: PhotoWithLayout = {
         ...photo,
         aspectCategory,
         colSpan,
+        rowSpan,
       };
-
-      if (aspectCategory === 'tall') {
-        flushRow();
-        result.push({
-          id: `${photo.photoId}`,
-          photos: [photoWithLayout],
-        });
-        continue;
-      }
 
       // 如果当前行放不下，先保存当前行
       if (currentColCount + colSpan > columns && currentRow.length > 0) {
@@ -203,8 +205,14 @@ const PhotoGrid = memo(function PhotoGrid({
     return result;
   }, [photos, columns]);
 
+  // 日期分组（仅在 groupByDateEnabled 时使用）
+  const dateGroups = useMemo<DateGroup<Photo>[]>(() => {
+    if (!groupByDateEnabled) return [];
+    return groupByDate(photos, (photo) => photo.dateTaken || photo.dateAdded);
+  }, [photos, groupByDateEnabled]);
+
   const overscanPx = useMemo(
-    () => Math.round(Math.min(900, Math.max(400, thumbnailSize * 3))),
+    () => Math.round(Math.min(1500, Math.max(600, thumbnailSize * 5))),
     [thumbnailSize]
   );
 
@@ -254,6 +262,26 @@ const PhotoGrid = memo(function PhotoGrid({
     };
   }, []);
 
+  // 嵌入模式下的无限滚动：监听哨兵元素进入视口
+  useEffect(() => {
+    if (!embedded || !groupByDateEnabled || !hasMore || !onLoadMore) return;
+
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: '800px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [embedded, groupByDateEnabled, hasMore, loading, onLoadMore]);
+
   // 渲染单行
   const rowContent = useCallback(
     (index: number) => {
@@ -265,41 +293,33 @@ const PhotoGrid = memo(function PhotoGrid({
           style={{
             display: 'grid',
             gridTemplateColumns: `repeat(${columns}, 1fr)`,
+            gridAutoRows: `${thumbnailSize}px`,
             gap: `${gap}px`,
             padding: `0 ${gap}px`,
             marginBottom: `${gap}px`,
             alignItems: 'start',
           }}
         >
-          {row.photos.map((photo) => {
-            const allowTallDoubleHeight = row.photos.length === 1;
-            const itemHeight =
-              allowTallDoubleHeight && photo.aspectCategory === 'tall'
-                ? thumbnailSize * 2 + gap
-                : thumbnailSize;
-
-            return (
-              <div
-                key={photo.photoId}
-                style={{
-                  gridColumn: photo.colSpan > 1 ? `span ${photo.colSpan}` : undefined,
-                  height: itemHeight,
-                  alignSelf: 'start',
-                }}
-              >
-                <PhotoThumbnail
-                  photo={photo}
-                  aspectCategory={photo.aspectCategory}
-                  selected={selectedIds.has(photo.photoId)}
-                  isScrolling={isScrolling}
-                  onClick={onPhotoClick}
-                  onDoubleClick={onPhotoDoubleClick}
-                  onContextMenu={onPhotoContextMenu}
-                  onSelect={onPhotoSelect}
-                />
-              </div>
-            );
-          })}
+          {row.photos.map((photo) => (
+            <div
+              key={photo.photoId}
+              style={{
+                gridColumn: photo.colSpan > 1 ? `span ${photo.colSpan}` : undefined,
+                gridRow: photo.rowSpan > 1 ? `span ${photo.rowSpan}` : undefined,
+              }}
+            >
+              <PhotoThumbnail
+                photo={photo}
+                aspectCategory={photo.aspectCategory}
+                selected={selectedIds.has(photo.photoId)}
+                isScrolling={isScrolling}
+                onClick={onPhotoClick}
+                onDoubleClick={onPhotoDoubleClick}
+                onContextMenu={onPhotoContextMenu}
+                onSelect={onPhotoSelect}
+              />
+            </div>
+          ))}
         </div>
       );
     },
@@ -412,6 +432,93 @@ const PhotoGrid = memo(function PhotoGrid({
             添加文件夹开始管理您的照片
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // 嵌入模式 + 日期分组：渲染静态内容，无虚拟滚动
+  if (embedded && groupByDateEnabled) {
+    return (
+      <div ref={containerRef} className="w-full" style={{ paddingTop: gap }}>
+        {dateGroups.map((group) => (
+          <div key={group.date} className="mb-8">
+            {/* 日期分组 Header */}
+            <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface/90 backdrop-blur-xl border border-border/40 rounded-xl">
+              <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-2xl font-bold tracking-tight text-on-surface">
+                    {group.displayDate}
+                  </h3>
+                  <span className="text-sm font-medium text-zinc-400">
+                    {group.items.length} 张
+                  </span>
+                </div>
+              </div>
+            </div>
+            {/* 照片网格 - 使用 CSS Grid 自动布局 */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                gridAutoRows: `${thumbnailSize}px`,
+                gap: `${gap}px`,
+                padding: `0 ${gap}px`,
+              }}
+            >
+              {group.items.map((photo) => {
+                const aspectCategory = getAspectRatioCategory(photo.width, photo.height);
+                const colSpan = aspectCategory === 'wide' ? Math.min(2, columns) : 1;
+                const rowSpan = aspectCategory === 'tall' ? 2 : 1;
+
+                return (
+                  <div
+                    key={photo.photoId}
+                    style={{
+                      gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined,
+                      gridRow: rowSpan > 1 ? `span ${rowSpan}` : undefined,
+                    }}
+                  >
+                    <PhotoThumbnail
+                      photo={photo}
+                      aspectCategory={aspectCategory}
+                      selected={selectedIds.has(photo.photoId)}
+                      isScrolling={false}
+                      onClick={onPhotoClick}
+                      onDoubleClick={onPhotoDoubleClick}
+                      onContextMenu={onPhotoContextMenu}
+                      onSelect={onPhotoSelect}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {hasMore && <div ref={loadMoreSentinelRef} className="h-1" />}
+        {loading && hasMore && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${columns}, 1fr)`,
+              gridAutoRows: `${thumbnailSize}px`,
+              gap: `${gap}px`,
+              padding: `0 ${gap}px`,
+            }}
+          >
+            {Array.from({ length: columns * 2 }).map((_, i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700"
+              />
+            ))}
+          </div>
+        )}
+        {loading && !hasMore && (
+          <div className="flex w-full items-center justify-center py-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+            <span className="ml-2 text-sm text-gray-500">加载中...</span>
+          </div>
+        )}
       </div>
     );
   }

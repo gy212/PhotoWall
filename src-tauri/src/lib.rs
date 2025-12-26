@@ -7,6 +7,7 @@ pub mod db;
 pub mod models;
 pub mod services;
 pub mod utils;
+pub mod window_effects;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -47,7 +48,7 @@ use commands::{
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
-    get_settings, save_settings, reset_settings,
+    get_settings, save_settings, reset_settings, apply_window_settings,
     // folder_sync
     get_sync_folders, add_sync_folder, remove_sync_folder, set_auto_sync_enabled,
     get_auto_sync_enabled, trigger_sync_now, validate_folder_path,
@@ -231,6 +232,7 @@ pub fn run() {
             get_settings,
             save_settings,
             reset_settings,
+            apply_window_settings,
             // folder_sync
             get_sync_folders,
             add_sync_folder,
@@ -249,6 +251,7 @@ pub fn run() {
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
+
             // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件
             services::thumbnail_queue::set_app_handle(app_handle.clone());
 
@@ -258,6 +261,36 @@ pub fn run() {
                     tracing::warn!("加载设置失败，使用默认设置: {}", err);
                     crate::models::AppSettings::default()
                 });
+
+            // Window Effects (sync with settings, and reapply on focus changes)
+            if let Some(window) = app.get_webview_window("main") {
+                crate::window_effects::apply_window_settings(&window, settings.window.clone());
+
+                let window_for_events = window.clone();
+                window.on_window_event(move |event| {
+                    use tauri::WindowEvent;
+                    match event {
+                        WindowEvent::Focused(focused) => {
+                            if *focused {
+                                crate::window_effects::reapply_last_window_settings(&window_for_events);
+                            } else {
+                                // 延迟重应用，避免 Windows 状态冲突
+                                let window_clone = window_for_events.clone();
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_millis(50));
+                                    crate::window_effects::reapply_last_window_settings(&window_clone);
+                                });
+                            }
+                        }
+                        WindowEvent::Resized(_)
+                        | WindowEvent::ScaleFactorChanged { .. }
+                        | WindowEvent::ThemeChanged(_) => {
+                            crate::window_effects::reapply_last_window_settings(&window_for_events);
+                        }
+                        _ => {}
+                    }
+                });
+            }
 
             let configured_threads = settings.performance.thumbnail_threads;
             let cpu_threads = std::thread::available_parallelism()

@@ -15,6 +15,8 @@ export interface ThumbnailOptions {
   priority?: number;
   /** 是否启用 */
   enabled?: boolean;
+  /** 暂停发起新请求（滚动时），但保留已缓存结果 */
+  suspendNewRequests?: boolean;
   /** 加载延迟（毫秒，用于滚动时防抖） */
   loadDelay?: number;
   /** 原图宽度（用于小图跳过逻辑） */
@@ -46,6 +48,7 @@ const DEFAULT_OPTIONS: Required<ThumbnailOptions> = {
   size: 'medium',
   priority: 0,
   enabled: true,
+  suspendNewRequests: false,
   loadDelay: 0,
   width: 0,
   height: 0,
@@ -75,6 +78,7 @@ export function useThumbnail(
     options.size,
     options.priority,
     options.enabled,
+    options.suspendNewRequests,
     options.loadDelay,
     options.width,
     options.height,
@@ -95,13 +99,7 @@ export function useThumbnail(
   const thumbnailEnabled = opts.enabled && runtimeAvailable;
 
   useEffect(() => {
-    if (!thumbnailEnabled) {
-      setThumbnailUrl(null);
-      setIsLoading(false);
-      return;
-    }
-
-    // 1. Check Store immediately
+    // 1. 始终先检查内存缓存（不受任何开关影响）
     const cached = thumbnailStore.get(fileHash, opts.size);
     if (cached) {
       setThumbnailUrl(cached);
@@ -109,9 +107,21 @@ export function useThumbnail(
       return;
     }
 
+    // 2. 未缓存时检查是否启用
+    if (!thumbnailEnabled) {
+      setThumbnailUrl(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // 3. 暂停新请求时（滚动中），保持当前状态不变，不发起请求
+    if (opts.suspendNewRequests) {
+      return;
+    }
+
     // Not in store, set loading
     setIsLoading(true);
-    
+
     // 2. Subscribe to store updates
     const unsubscribe = thumbnailStore.subscribe(fileHash, opts.size, (url) => {
       setThumbnailUrl(url);
@@ -122,73 +132,73 @@ export function useThumbnail(
     let active = true;
 
     const triggerLoad = async () => {
-        try {
-            // Check disk cache first via backend (fast path)
-            const diskCachePath = await invoke<string | null>('get_thumbnail_cache_path', {
-                fileHash,
-                size: opts.size,
-            });
+      try {
+        // Check disk cache first via backend (fast path)
+        const diskCachePath = await invoke<string | null>('get_thumbnail_cache_path', {
+          fileHash,
+          size: opts.size,
+        });
 
-            if (!active) return;
+        if (!active) return;
 
-            if (diskCachePath) {
-                 // Found in disk cache, update store manually which triggers our subscriber
-                 const assetUrl = convertFileSrc(diskCachePath);
-                 thumbnailStore.set(fileHash, opts.size, assetUrl);
-                 // subscription will handle state update
-            } else {
-                 // Not in disk cache, enqueue generation
-                 await invoke('enqueue_thumbnail', {
-                    sourcePath,
-                    fileHash,
-                    size: opts.size,
-                    priority: opts.priority,
-                    width: opts.width || undefined,
-                    height: opts.height || undefined,
-                 });
-            }
-        } catch (err) {
-            if (active) {
-                console.error("Thumbnail error:", err);
-                setError(err instanceof Error ? err : new Error(String(err)));
-                setIsLoading(false);
-            }
+        if (diskCachePath) {
+          // Found in disk cache, update store manually which triggers our subscriber
+          const assetUrl = convertFileSrc(diskCachePath);
+          thumbnailStore.set(fileHash, opts.size, assetUrl);
+          // subscription will handle state update
+        } else {
+          // Not in disk cache, enqueue generation
+          await invoke('enqueue_thumbnail', {
+            sourcePath,
+            fileHash,
+            size: opts.size,
+            priority: opts.priority,
+            width: opts.width || undefined,
+            height: opts.height || undefined,
+          });
         }
+      } catch (err) {
+        if (active) {
+          console.error("Thumbnail error:", err);
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setIsLoading(false);
+        }
+      }
     };
 
     // Debounce logic
     if (opts.loadDelay > 0) {
-        if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
-        loadTimerRef.current = setTimeout(triggerLoad, opts.loadDelay);
+      if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
+      loadTimerRef.current = setTimeout(triggerLoad, opts.loadDelay);
     } else {
-        triggerLoad();
+      triggerLoad();
     }
 
     return () => {
       active = false;
       unsubscribe();
       if (loadTimerRef.current) {
-          clearTimeout(loadTimerRef.current);
-          loadTimerRef.current = null;
+        clearTimeout(loadTimerRef.current);
+        loadTimerRef.current = null;
       }
     };
-  }, [fileHash, sourcePath, opts.size, opts.priority, thumbnailEnabled, reloadTrigger, opts.loadDelay]);
+  }, [fileHash, sourcePath, opts.size, opts.priority, thumbnailEnabled, opts.suspendNewRequests, reloadTrigger, opts.loadDelay]);
 
   const reload = useCallback(() => {
-      setReloadTrigger(prev => prev + 1);
-      setError(null);
+    setReloadTrigger(prev => prev + 1);
+    setError(null);
   }, []);
 
   const cancel = useCallback(() => {
-      if (loadTimerRef.current) {
-          clearTimeout(loadTimerRef.current);
-          loadTimerRef.current = null;
-      }
-      // With global store, individual cancellation is tricky because other components might need it.
-      // But we can send a cancel hint to backend.
-      if (thumbnailEnabled) {
-          invoke('cancel_thumbnail', { fileHash }).catch(() => {});
-      }
+    if (loadTimerRef.current) {
+      clearTimeout(loadTimerRef.current);
+      loadTimerRef.current = null;
+    }
+    // With global store, individual cancellation is tricky because other components might need it.
+    // But we can send a cancel hint to backend.
+    if (thumbnailEnabled) {
+      invoke('cancel_thumbnail', { fileHash }).catch(() => { });
+    }
   }, [fileHash, thumbnailEnabled]);
 
   return { thumbnailUrl, isLoading, error, reload, cancel };
@@ -267,10 +277,10 @@ export async function checkThumbnailsCached(
   items: Array<{ fileHash: string; size?: ThumbnailSize }>
 ): Promise<Map<string, { cached: boolean; path: string | null }>> {
   interface CheckCacheResult {
-      fileHash: string;
-      size: string;
-      cached: boolean;
-      path: string | null;
+    fileHash: string;
+    size: string;
+    cached: boolean;
+    path: string | null;
   }
   const results = await invoke<CheckCacheResult[]>('check_thumbnails_cached', { items });
   const map = new Map<string, { cached: boolean; path: string | null }>();
@@ -376,7 +386,7 @@ export function useThumbnailWithEvents(
       unlistenRef.current = null;
     }
     if (thumbnailEnabled) {
-      invoke('cancel_thumbnail', { fileHash }).catch(() => {});
+      invoke('cancel_thumbnail', { fileHash }).catch(() => { });
     }
   }, [fileHash, thumbnailEnabled]);
 
@@ -408,67 +418,67 @@ export function useThumbnailWithEvents(
     const startLoad = () => {
       setIsLoading(true);
 
-    // 2. 查磁盘缓存
-    invoke<string | null>('get_thumbnail_cache_path', {
-      fileHash,
-      size: opts.size,
-    }).then(async (path) => {
-      if (!mountedRef.current) return;
+      // 2. 查磁盘缓存
+      invoke<string | null>('get_thumbnail_cache_path', {
+        fileHash,
+        size: opts.size,
+      }).then(async (path) => {
+        if (!mountedRef.current) return;
 
-      if (path) {
-        // 磁盘缓存命中
-        const url = convertFileSrc(path);
-        addToCache(fileHash, opts.size, url);
-        setThumbnailUrl(url);
+        if (path) {
+          // 磁盘缓存命中
+          const url = convertFileSrc(path);
+          addToCache(fileHash, opts.size, url);
+          setThumbnailUrl(url);
+          setIsLoading(false);
+        } else {
+          // 3. 不存在则 enqueue 并监听事件
+          await invoke('enqueue_thumbnail', {
+            sourcePath,
+            fileHash,
+            size: opts.size,
+            priority: opts.priority,
+            width: opts.width || undefined,
+            height: opts.height || undefined,
+          });
+
+          // 监听 thumbnail-ready 事件
+          unlistenRef.current = await listen<ThumbnailReadyPayload>('thumbnail-ready', (event) => {
+            if (!mountedRef.current) return;
+
+            if (event.payload.fileHash === fileHash && event.payload.size === opts.size) {
+              let url: string;
+
+              if (event.payload.useOriginal) {
+                // 小图跳过：直接使用原图
+                url = convertFileSrc(event.payload.path);
+                addToCache(fileHash, opts.size, url);
+              } else if (event.payload.isPlaceholder && event.payload.placeholderBase64) {
+                // 占位图：使用 data URL，不添加到持久缓存
+                url = `data:image/webp;base64,${event.payload.placeholderBase64}`;
+                // 注意：占位图不添加到缓存，下次请求时会重试提取
+              } else {
+                // 正常缩略图：转换文件路径并添加到缓存
+                url = convertFileSrc(event.payload.path);
+                addToCache(fileHash, opts.size, url);
+              }
+
+              setThumbnailUrl(url);
+              setIsLoading(false);
+
+              // 收到事件后取消监听
+              if (unlistenRef.current) {
+                unlistenRef.current();
+                unlistenRef.current = null;
+              }
+            }
+          });
+        }
+      }).catch((err) => {
+        if (!mountedRef.current) return;
+        setError(err instanceof Error ? err : new Error(String(err)));
         setIsLoading(false);
-      } else {
-        // 3. 不存在则 enqueue 并监听事件
-        await invoke('enqueue_thumbnail', {
-          sourcePath,
-          fileHash,
-          size: opts.size,
-          priority: opts.priority,
-          width: opts.width || undefined,
-          height: opts.height || undefined,
-        });
-
-        // 监听 thumbnail-ready 事件
-        unlistenRef.current = await listen<ThumbnailReadyPayload>('thumbnail-ready', (event) => {
-          if (!mountedRef.current) return;
-
-          if (event.payload.fileHash === fileHash && event.payload.size === opts.size) {
-            let url: string;
-
-            if (event.payload.useOriginal) {
-              // 小图跳过：直接使用原图
-              url = convertFileSrc(event.payload.path);
-              addToCache(fileHash, opts.size, url);
-            } else if (event.payload.isPlaceholder && event.payload.placeholderBase64) {
-              // 占位图：使用 data URL，不添加到持久缓存
-              url = `data:image/webp;base64,${event.payload.placeholderBase64}`;
-              // 注意：占位图不添加到缓存，下次请求时会重试提取
-            } else {
-              // 正常缩略图：转换文件路径并添加到缓存
-              url = convertFileSrc(event.payload.path);
-              addToCache(fileHash, opts.size, url);
-            }
-
-            setThumbnailUrl(url);
-            setIsLoading(false);
-
-            // 收到事件后取消监听
-            if (unlistenRef.current) {
-              unlistenRef.current();
-              unlistenRef.current = null;
-            }
-          }
-        });
-      }
-    }).catch((err) => {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err : new Error(String(err)));
-      setIsLoading(false);
-    });
+      });
     };
 
     if (opts.loadDelay > 0) {

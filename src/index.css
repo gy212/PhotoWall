@@ -20,68 +20,60 @@
 
 @layer base {
   :root {
-    /* === 新UI设计色系 === */
-    --primary: #007aff;
-    --primary-light: #e6f2ff;
-    --primary-dark: #005ec4;
-    
-    /* 背景色 */
-    --bg-base: #f8f9fc;
-    --bg-sidebar: #f0f2f7;
-    --bg-surface: #ffffff;
-    --bg-element: #eef0f4;
-    --bg-hover: #e4e7ee;
-    
-    /* 文本颜色 */
-    --text-primary: #1c1e21;
-    --text-secondary: #6b7280;
-    --text-tertiary: #8e8e93;
-    
-    /* 边框颜色 */
-    --border-color: #dfe3eb;
-    --border-light: #e5e5ea;
-    
-    /* 语义色 */
-    --color-background: var(--bg-base);
-    --color-surface: var(--bg-surface);
-    --color-primary: var(--primary);
-    --color-primary-hover: var(--primary-dark);
-    --color-primary-foreground: #ffffff;
-    --color-secondary: var(--text-secondary);
-    --color-secondary-foreground: var(--text-primary);
-    --color-muted: var(--text-tertiary);
-    --color-muted-foreground: var(--text-tertiary);
-    --color-border: var(--border-color);
-    
-    --radius: 0.75rem;
-  }
+    /* === 深色主题 (固定) === */
+    /* 品牌色 */
+    --primary: #3574f0;
+    --primary-light: #3574f0;
+    --primary-dark: #3069db;
 
-  /* === 深色主题 (JetBrains New UI 风格) === */
-  .dark {
     /* 核心背景 - 冷灰/深蓝灰 */
-    --bg-base: #1e1f22;      /* 编辑器/底层背景 */
-    --bg-sidebar: #2b2d30;   /* 工具栏/侧边栏背景 */
-    --bg-surface: #2b2d30;   /* 主要内容面板背景 - 与侧边栏一致 */
-    
+    --bg-base: #1e1f22;
+    --bg-sidebar: #2b2d30;
+    --bg-surface: #2b2d30;
+
     /* 交互元素 */
-    --bg-element: #393b40;   /* 输入框、未选中按钮、卡片背景 */
-    --bg-hover: #35373b;     /* 悬停状态 */
-    
+    --bg-element: #393b40;
+    --bg-hover: #35373b;
+
     /* 文本颜色 */
     --text-primary: #dfe1e5;
     --text-secondary: #9da0a5;
     --text-tertiary: #6f737a;
-    
+
     /* 边框与分割线 */
-    --border-color: #26282e; /* 极深色边框，接近背景色，避免发光感 */
+    --border-color: #26282e;
     --border-light: #2b2d30;
-    
-    /* 品牌色 - JetBrains Blue */
+
+    /* 语义色映射 */
+    --color-background: var(--bg-base);
+    --color-surface: var(--bg-surface);
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-dark);
+    --color-primary-foreground: #ffffff;
+    --color-secondary: var(--text-secondary);
+    --color-secondary-foreground: var(--text-primary);
+    --color-muted: var(--text-tertiary);
+    --color-muted-foreground: var(--text-tertiary);
+    --color-border: var(--border-color);
+
+    --radius: 0.75rem;
+  }
+
+  /* .dark 类保留以兼容现有代码，但值与 :root 相同 */
+  .dark {
     --primary: #3574f0;
     --primary-light: #3574f0;
     --primary-dark: #3069db;
-    
-    /* 变量映射 */
+    --bg-base: #1e1f22;
+    --bg-sidebar: #2b2d30;
+    --bg-surface: #2b2d30;
+    --bg-element: #393b40;
+    --bg-hover: #35373b;
+    --text-primary: #dfe1e5;
+    --text-secondary: #9da0a5;
+    --text-tertiary: #6f737a;
+    --border-color: #26282e;
+    --border-light: #2b2d30;
     --color-background: var(--bg-base);
     --color-surface: var(--bg-surface);
     --color-primary: var(--primary);
@@ -94,29 +86,32 @@
     --color-border: var(--border-color);
   }
 
+  html,
+  body {
+    background-color: transparent;
+  }
+
   body {
     font-family: 'Inter', sans-serif;
-    background-color: var(--bg-base);
     color: var(--text-primary);
   }
 }
 
 @layer utilities {
+
   /* Material Symbols配置 */
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
     font-size: 22px;
   }
-  
+
   .material-symbols-outlined.filled {
     font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
 
-  /* 侧边栏样式 */
+  /* 侧边栏样式 - 使用原生 Tauri 模糊，不使用 CSS backdrop-filter */
   .sidebar {
-    background: rgba(var(--bg-sidebar), 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    background: rgba(15, 23, 42, 0.85);
   }
 
   /* 侧边栏导航项 */
@@ -144,7 +139,8 @@
   }
 
   .dark .nav-item.active {
-    background: rgba(53, 116, 240, 0.15); /* Primary color low opacity */
+    background: rgba(53, 116, 240, 0.15);
+    /* Primary color low opacity */
     color: #3574f0;
   }
 
@@ -154,17 +150,16 @@
     border-radius: 0.75rem;
   }
 
-  /* 卡片样式 */
+  /* 卡片样式 - 使用原生 Tauri 模糊，不使用 CSS backdrop-filter */
   .card {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid var(--border-light);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 1rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   }
 
   .dark .card {
-    background: var(--bg-element);
+    background: rgba(255, 255, 255, 0.03);
     border-color: var(--border-color);
   }
 
@@ -324,8 +319,14 @@
   }
 
   /* Scrollbar hiding */
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
@@ -381,5 +382,35 @@
   .dark .nav-active {
     background: rgba(53, 116, 240, 0.15);
     color: #3574f0;
+  }
+
+  /* 玻璃拟态基础类 (UI Preview) */
+  .glass-panel {
+    /* 使用 CSS 变量以支持动态调节，默认值为 0.3 不透明度和 10px 模糊 */
+    background: rgba(15, 23, 42, var(--glass-opacity, 0.3));
+    backdrop-filter: blur(var(--glass-blur, 10px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 10px));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Tauri 原生毛玻璃已由系统提供时，避免整窗使用 backdrop-filter 导致拖动/缩放闪烁 */
+  .native-glass-panel {
+    background: rgba(15, 23, 42, var(--glass-opacity, 0.3));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
+  }
+
+  .glass-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
   }
 }

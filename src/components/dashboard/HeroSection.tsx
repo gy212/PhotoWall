@@ -1,0 +1,99 @@
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { getFavoritePhotos, getAssetUrl } from '@/services/api';
+import { useMemo } from 'react';
+import type { Photo } from '@/types';
+
+export default function HeroSection() {
+    const navigate = useNavigate();
+
+    // 获取收藏照片
+    const { data: favoritesData, isLoading } = useQuery({
+        queryKey: ['favoritePhotos', 'hero'],
+        queryFn: () => getFavoritePhotos({ page: 1, pageSize: 10 }),
+        staleTime: 30000, // 30秒内不重新请求
+    });
+
+    // 随机选择一张展示
+    const featuredPhoto: Photo | null = useMemo(() => {
+        const photos = favoritesData?.items ?? [];
+        if (photos.length === 0) return null;
+        // 使用当天日期作为种子，保证同一天展示同一张
+        const today = new Date().toDateString();
+        const seed = today.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const index = seed % photos.length;
+        return photos[index];
+    }, [favoritesData]);
+
+    const hasFavorites = (favoritesData?.items?.length ?? 0) > 0;
+
+    return (
+        <section className="grid grid-cols-12 gap-6 h-[320px] flex-shrink-0">
+            {/* 左侧：精选大卡片 */}
+            <div
+                onClick={() => hasFavorites && navigate('/favorites')}
+                className={`col-span-8 glass-card rounded-2xl relative overflow-hidden flex flex-col border border-white/5 ${hasFavorites ? 'cursor-pointer group' : ''}`}
+            >
+                {isLoading ? (
+                    // 加载状态
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="h-10 w-10 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                    </div>
+                ) : featuredPhoto ? (
+                    // 有精选照片
+                    <>
+                        <img
+                            src={getAssetUrl(featuredPhoto.filePath)}
+                            alt={featuredPhoto.fileName}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                        <div className="relative z-10 mt-auto p-6">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="material-symbols-outlined text-yellow-400 text-xl">star</span>
+                                <span className="text-yellow-400/80 text-sm font-medium">每日精选</span>
+                            </div>
+                            <h2 className="text-2xl font-semibold text-white mb-1">
+                                {featuredPhoto.fileName}
+                            </h2>
+                            <p className="text-white/60 text-sm">
+                                {favoritesData?.total ?? 0} 张收藏照片
+                            </p>
+                        </div>
+                    </>
+                ) : (
+                    // 空状态
+                    <>
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                            <div className="relative z-10 w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-lg shadow-black/20">
+                                <span className="material-symbols-outlined text-5xl text-blue-300/60">photo_library</span>
+                            </div>
+                            <h2 className="text-2xl font-semibold mb-3 text-white/80 relative z-10">每日精选</h2>
+                            <p className="text-white/40 text-sm max-w-md relative z-10">
+                                收藏您喜欢的照片后，这里将展示您的精选作品
+                            </p>
+                            <p className="text-white/30 text-xs mt-2 relative z-10">
+                                在照片详情中点击 ⭐ 即可收藏
+                            </p>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* 右侧：文件合集入口 */}
+            <div
+                onClick={() => navigate('/folders')}
+                className="col-span-4 glass-card rounded-2xl relative overflow-hidden group cursor-pointer flex flex-col items-center justify-center text-center p-6 border-white/5 hover:border-white/20 transition-all duration-300"
+            >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                <div className="relative z-10 w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-white/10 transition-all duration-300 shadow-lg shadow-black/20">
+                    <span className="material-symbols-outlined text-4xl text-blue-300">folder_open</span>
+                </div>
+                <h3 className="text-xl font-semibold relative z-10 text-white">文件合集</h3>
+                <p className="text-white/40 text-sm mt-2 relative z-10">浏览所有文件夹和来源</p>
+            </div>
+        </section>
+    );
+}

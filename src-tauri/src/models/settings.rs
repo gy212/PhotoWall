@@ -99,6 +99,35 @@ impl Default for PerformanceSettings {
     }
 }
 
+/// 窗口外观设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowSettings {
+    /// 窗口背景不透明度 (0.0 - 1.0) - 保留兼容性
+    #[serde(default = "default_opacity")]
+    pub opacity: f64,
+    /// 窗口透明度 (0-100)，0=不透明，100=高度透明
+    #[serde(default = "default_transparency")]
+    pub transparency: u32,
+}
+
+fn default_opacity() -> f64 {
+    0.3
+}
+
+fn default_transparency() -> u32 {
+    30
+}
+
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            opacity: 0.3,
+            transparency: 30,
+        }
+    }
+}
+
 /// 应用程序设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,6 +142,9 @@ pub struct AppSettings {
     pub thumbnail: ThumbnailSettings,
     /// 性能设置
     pub performance: PerformanceSettings,
+    /// 窗口设置
+    #[serde(default)]
+    pub window: WindowSettings,
 }
 
 impl Default for AppSettings {
@@ -123,6 +155,7 @@ impl Default for AppSettings {
             scan: ScanSettings::default(),
             thumbnail: ThumbnailSettings::default(),
             performance: PerformanceSettings::default(),
+            window: WindowSettings::default(),
         }
     }
 }
