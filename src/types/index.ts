@@ -334,6 +334,10 @@ export interface WindowSettings {
   opacity: number;
   /** 窗口透明度 (0-100) */
   transparency: number;
+  /** 模糊半径 (0-100) */
+  blurRadius: number;
+  /** 是否启用自定义桌面模糊 */
+  customBlurEnabled: boolean;
 }
 
 /**

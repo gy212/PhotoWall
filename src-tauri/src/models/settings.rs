@@ -109,6 +109,12 @@ pub struct WindowSettings {
     /// 窗口透明度 (0-100)，0=不透明，100=高度透明
     #[serde(default = "default_transparency")]
     pub transparency: u32,
+    /// 模糊半径 (0-100)，0=不模糊，100=最大模糊
+    #[serde(default = "default_blur_radius")]
+    pub blur_radius: u32,
+    /// 是否启用自定义桌面模糊（而非DWM Acrylic）
+    #[serde(default = "default_custom_blur_enabled")]
+    pub custom_blur_enabled: bool,
 }
 
 fn default_opacity() -> f64 {
@@ -119,11 +125,21 @@ fn default_transparency() -> u32 {
     30
 }
 
+fn default_blur_radius() -> u32 {
+    20
+}
+
+fn default_custom_blur_enabled() -> bool {
+    false
+}
+
 impl Default for WindowSettings {
     fn default() -> Self {
         Self {
             opacity: 0.3,
             transparency: 30,
+            blur_radius: 20,
+            custom_blur_enabled: false,
         }
     }
 }

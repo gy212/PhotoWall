@@ -27,6 +27,14 @@ interface SettingsState {
   windowOpacity: number;
   /** 窗口透明度 (0-100)，0=不透明，100=高度透明 */
   windowTransparency: number;
+  /** 模糊半径 (0-100) */
+  blurRadius: number;
+  /** 是否启用自定义桌面模糊 */
+  customBlurEnabled: boolean;
+  /** 是否支持 Composition Backdrop (Windows 11+) */
+  compositionBlurSupported: boolean;
+  /** 是否启用 Composition Backdrop 模糊 */
+  compositionBlurEnabled: boolean;
 
   // Actions
   setLanguage: (language: 'zh-CN' | 'en-US') => void;
@@ -39,6 +47,10 @@ interface SettingsState {
   setAutoScanOnStart: (enabled: boolean) => void;
   setWindowOpacity: (opacity: number) => void;
   setWindowTransparency: (transparency: number) => void;
+  setBlurRadius: (radius: number) => void;
+  setCustomBlurEnabled: (enabled: boolean) => void;
+  setCompositionBlurSupported: (supported: boolean) => void;
+  setCompositionBlurEnabled: (enabled: boolean) => void;
   resetToDefaults: () => void;
 }
 
@@ -52,6 +64,10 @@ const defaultSettings = {
   autoScanOnStart: false,
   windowOpacity: 0.3,
   windowTransparency: 30,
+  blurRadius: 20,
+  customBlurEnabled: true,
+  compositionBlurSupported: false,
+  compositionBlurEnabled: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(persist(
@@ -75,8 +91,24 @@ export const useSettingsStore = create<SettingsState>()(persist(
     setAutoCleanupCache: (autoCleanupCache) => set({ autoCleanupCache }),
     setWorkerThreads: (workerThreads) => set({ workerThreads }),
     setAutoScanOnStart: (autoScanOnStart) => set({ autoScanOnStart }),
-    setWindowOpacity: (windowOpacity) => set({ windowOpacity }),
-    setWindowTransparency: (windowTransparency) => set({ windowTransparency }),
+    setWindowOpacity: (windowOpacity) => {
+      const clampedOpacity = Math.max(0, Math.min(1, windowOpacity));
+      set({
+        windowOpacity: clampedOpacity,
+        windowTransparency: Math.round(clampedOpacity * 100),
+      });
+    },
+    setWindowTransparency: (windowTransparency) => {
+      const clampedTransparency = Math.max(0, Math.min(100, windowTransparency));
+      set({
+        windowTransparency: clampedTransparency,
+        windowOpacity: clampedTransparency / 100,
+      });
+    },
+    setBlurRadius: (blurRadius) => set({ blurRadius: Math.max(0, Math.min(100, blurRadius)) }),
+    setCustomBlurEnabled: (customBlurEnabled) => set({ customBlurEnabled }),
+    setCompositionBlurSupported: (compositionBlurSupported) => set({ compositionBlurSupported }),
+    setCompositionBlurEnabled: (compositionBlurEnabled) => set({ compositionBlurEnabled }),
 
     resetToDefaults: () => set(defaultSettings),
   }),

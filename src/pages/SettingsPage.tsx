@@ -35,10 +35,12 @@ function SettingsPage() {
 
   // Store actions
   const {
-    windowOpacity,
     windowTransparency,
-    setWindowOpacity,
-    setWindowTransparency
+    blurRadius,
+    customBlurEnabled,
+    setWindowTransparency,
+    setBlurRadius,
+    setCustomBlurEnabled,
   } = useSettingsStore();
 
   // 各区块的 ref
@@ -91,8 +93,9 @@ function SettingsPage() {
 
       // 同步 Store 中的外观设置
       if (data.window) {
-        setWindowOpacity(data.window.opacity);
         setWindowTransparency(data.window.transparency ?? 30);
+        setBlurRadius(data.window.blurRadius ?? 20);
+        setCustomBlurEnabled(data.window.customBlurEnabled ?? customBlurEnabled);
       }
     } catch (err) {
       showMessage('error', `加载设置失败: ${err}`);
@@ -123,8 +126,10 @@ function SettingsPage() {
       const settingsToSave = {
         ...settings,
         window: {
-          opacity: windowOpacity,
-          transparency: windowTransparency
+          opacity: windowTransparency / 100,
+          transparency: windowTransparency,
+          blurRadius: blurRadius,
+          customBlurEnabled: customBlurEnabled
         }
       };
       await saveSettings(settingsToSave);
@@ -143,8 +148,9 @@ function SettingsPage() {
       const defaults = await resetSettings();
       setSettings(defaults);
       if (defaults.window) {
-        setWindowOpacity(defaults.window.opacity);
         setWindowTransparency(defaults.window.transparency ?? 30);
+        setBlurRadius(defaults.window.blurRadius ?? 20);
+        setCustomBlurEnabled(defaults.window.customBlurEnabled ?? customBlurEnabled);
       }
       showMessage('success', '设置已重置为默认值');
     } catch (err) {
@@ -377,28 +383,30 @@ function SettingsPage() {
               <h3 className="text-lg font-semibold text-white">外观</h3>
               <p className="text-sm text-white/50 mb-4">调整窗口背景效果。</p>
 
+
+
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white/90">自定义桌面模糊</p>
+                  <p className="text-xs text-white/50">开启后使用桌面截图模糊，半径可调；关闭后使用系统材质（Windows 下半径不可精确控制）</p>
+                </div>
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    data-testid="custom-blur-toggle"
+                    type="checkbox"
+                    checked={customBlurEnabled}
+                    onChange={(e) => setCustomBlurEnabled(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="peer h-6 w-11 rounded-full bg-button after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-outline/30 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20"></div>
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* 不透明度滑块 */}
                 <div>
                   <div className="flex items-baseline justify-between mb-2">
                     <label className="text-sm text-white/80">背景不透明度</label>
-                    <span className="text-xs text-white/50">{Math.round(windowOpacity * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={windowOpacity * 100}
-                    onChange={(e) => setWindowOpacity(parseInt(e.target.value) / 100)}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
-                  />
-                </div>
-
-                {/* 窗口透明度滑块 */}
-                <div>
-                  <div className="flex items-baseline justify-between mb-2">
-                    <label className="text-sm text-white/80">窗口透明度</label>
                     <span className="text-xs text-white/50">{windowTransparency}%</span>
                   </div>
                   <input
@@ -408,6 +416,24 @@ function SettingsPage() {
                     step="1"
                     value={windowTransparency}
                     onChange={(e) => setWindowTransparency(parseInt(e.target.value))}
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                  />
+                </div>
+
+                {/* 模糊半径滑块 */}
+                <div>
+                  <div className="flex items-baseline justify-between mb-2">
+                    <label className="text-sm text-white/80">模糊半径</label>
+                    <span className="text-xs text-white/50">{blurRadius}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={blurRadius}
+                    onChange={(e) => setBlurRadius(parseInt(e.target.value))}
+                    disabled={!customBlurEnabled}
                     className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
                   />
                 </div>

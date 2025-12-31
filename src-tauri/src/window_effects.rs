@@ -57,6 +57,12 @@ fn apply_windows_effects(window: &WebviewWindow, settings: &WindowSettings) {
     // 清除旧效果
     clear_all_effects(window);
 
+    // When custom desktop blur is enabled (rendered by the webview), keep native vibrancy off
+    // to avoid a fixed-strength DWM blur that cannot be tuned.
+    if settings.custom_blur_enabled {
+        return;
+    }
+
     // 使用 transparency 参数 (0-100)
     // 0 = 不透明 (alpha=240), 100 = 高度透明 (alpha=20)
     let transparency = settings.transparency.min(100);

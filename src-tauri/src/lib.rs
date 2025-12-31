@@ -56,6 +56,11 @@ use commands::{
     get_folder_tree, get_folder_children, get_photos_by_folder, get_folder_photo_count,
     // logging
     log_frontend,
+    // desktop_blur
+    get_blurred_desktop, set_exclude_from_capture, clear_blur_cache,
+    // composition_backdrop (Windows 11+)
+    is_composition_blur_supported, enable_composition_blur, disable_composition_blur,
+    set_composition_blur_radius, set_composition_tint,
 };
 use db::Database;
 
@@ -248,6 +253,16 @@ pub fn run() {
             get_folder_photo_count,
             // logging
             log_frontend,
+            // desktop_blur
+            get_blurred_desktop,
+            set_exclude_from_capture,
+            clear_blur_cache,
+            // composition_backdrop (Windows 11+)
+            is_composition_blur_supported,
+            enable_composition_blur,
+            disable_composition_blur,
+            set_composition_blur_radius,
+            set_composition_tint,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

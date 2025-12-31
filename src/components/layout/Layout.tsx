@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import AppHeader from './AppHeader';
+import BlurredBackground from './BlurredBackground';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 /**
@@ -35,7 +36,24 @@ function Layout() {
   }, []);
 
   // 从 Store 获取外观设置
-  const { windowOpacity, windowTransparency } = useSettingsStore();
+  const { windowOpacity, windowTransparency, blurRadius, customBlurEnabled } = useSettingsStore();
+
+  // 同步玻璃拟态 CSS 变量（影响 glass-panel / native-glass-panel 等）
+  useLayoutEffect(() => {
+    const clampedTransparency = Math.max(0, Math.min(100, windowTransparency));
+    const clampedBlurRadius = Math.max(0, Math.min(100, blurRadius));
+
+    document.documentElement.style.setProperty(
+      '--glass-opacity',
+      (clampedTransparency / 100).toString()
+    );
+    document.documentElement.style.setProperty('--glass-blur', `${clampedBlurRadius}px`);
+
+    return () => {
+      document.documentElement.style.removeProperty('--glass-opacity');
+      document.documentElement.style.removeProperty('--glass-blur');
+    };
+  }, [windowTransparency, blurRadius]);
 
   // 将外观设置同步到原生窗口效果（Tauri 桌面端）
   useEffect(() => {
@@ -50,6 +68,8 @@ function Layout() {
         settings: {
           opacity: windowOpacity,
           transparency: windowTransparency,
+          blurRadius: blurRadius,
+          customBlurEnabled: customBlurEnabled,
         },
       }).catch((err) => {
         console.debug('[window] apply_window_settings failed:', err);
@@ -62,10 +82,11 @@ function Layout() {
         applyWindowAppearanceTimer.current = null;
       }
     };
-  }, [tauri, windowOpacity, windowTransparency]);
+  }, [tauri, windowOpacity, windowTransparency, blurRadius, customBlurEnabled]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden native-glass-panel text-white/90 font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden native-glass-panel text-white/90 font-sans relative z-0">
+      <BlurredBackground enabled={customBlurEnabled} />
       <AppHeader />
       <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden relative">

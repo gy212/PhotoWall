@@ -1190,6 +1190,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
+name = "fastblur"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8383bbc116936203138cc8fe615c6364790847af8985a4bf579baaa4a86dca2d"
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3307,6 +3313,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
+ "fastblur",
  "image",
  "kamadak-exif",
  "libloading 0.8.9",
@@ -3334,6 +3341,9 @@ dependencies = [
  "walkdir",
  "window-vibrancy",
  "windows 0.62.2",
+ "windows-collections 0.3.2",
+ "windows-core 0.62.2",
+ "windows-numerics 0.3.1",
  "xxhash-rust",
 ]
 
