@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { getAllWindows, getCurrentWindow } from '@tauri-apps/api/window';
+import { AnimatePresence, motion } from 'framer-motion';
 import AppHeader from './AppHeader';
 import BlurredBackground from './BlurredBackground';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -9,9 +11,45 @@ import { useSettingsStore } from '@/stores/settingsStore';
  * 主布局组件 - 深色玻璃风格
  */
 function Layout() {
+  const location = useLocation(); // 获取当前路径用于动画 key
   const warmCacheTriggered = useRef(false);
+  const splashClosed = useRef(false);
   const applyWindowAppearanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tauri = isTauri();
+
+  // 启动时处理 Splash Screen
+  useEffect(() => {
+    if (!tauri || splashClosed.current) return;
+
+    const initApp = async () => {
+      // 模拟或者等待初始化 (例如等待 1.5 秒让 Logo 动画展示完)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      try {
+        const windows = await getAllWindows();
+        const splashWin = windows.find(w => w.label === 'splash');
+        const mainWin = getCurrentWindow();
+
+        if (splashWin) {
+          // 显示主窗口
+          await mainWin.show();
+          await mainWin.setFocus();
+          // 关闭 Splash
+          await splashWin.close();
+        } else {
+          // 如果找不到 splash (开发模式可能)，确保主窗口显示
+          await mainWin.show();
+        }
+        splashClosed.current = true;
+      } catch (e) {
+        console.error('Failed to close splash screen', e);
+        // Fallback: ensure main window is visible
+        getCurrentWindow().show();
+      }
+    };
+
+    initApp();
+  }, [tauri]);
 
   // 启动后延迟触发暖缓存
   useEffect(() => {
@@ -85,12 +123,23 @@ function Layout() {
   }, [tauri, windowOpacity, windowTransparency, blurRadius, customBlurEnabled]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden native-glass-panel text-white/90 font-sans relative z-0">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background text-primary font-sans relative z-0">
       <BlurredBackground enabled={customBlurEnabled} />
       <AppHeader />
       <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
         <div className="flex-1 overflow-hidden relative">
-          <Outlet />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="h-full w-full"
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
     </div>

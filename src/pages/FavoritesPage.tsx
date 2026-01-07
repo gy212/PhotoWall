@@ -11,6 +11,7 @@ import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
+import { Icon } from '@/components/common/Icon';
 import {
   getFavoritePhotos,
   setPhotosFavorite,
@@ -22,11 +23,11 @@ const PAGE_SIZE = 100;
 
 function FavoritesPage() {
   const navigate = useNavigate();
-  
+
   // 从 store 获取视图设置
   const thumbnailSize = usePhotoStore(state => state.thumbnailSize);
   const viewMode = usePhotoStore(state => state.viewMode);
-  
+
   // 选择相关
   const selectedIds = useSelectionStore(state => state.selectedIds);
   const lastSelectedId = useSelectionStore(state => state.lastSelectedId);
@@ -203,7 +204,7 @@ function FavoritesPage() {
 
     try {
       const photoIds = Array.from(selectedIds);
-      
+
       // 使用批量 API
       await setPhotosFavorite(photoIds, false);
 
@@ -255,128 +256,132 @@ function FavoritesPage() {
   // 空状态
   if (photos.length === 0 && !loading && !error) {
     return (
-      <div className="flex h-full w-full flex-col bg-surface rounded-xl">
-        {/* 页面头部 */}
-        <div className="p-6 border-b border-outline/30">
-          <div className="flex items-center gap-4">
-            <span className="material-symbols-outlined text-3xl text-red-500 filled">favorite</span>
-            <div>
-              <h1 className="text-4xl font-black text-on-surface">收藏</h1>
-              <p className="text-on-surface-variant">0 张照片</p>
+      <div className="h-full w-full p-6">
+        <div className="flex h-full w-full flex-col card rounded-2xl border border-border">
+          {/* 页面头部 */}
+          <div className="p-6 border-b border-border">
+            <div className="flex items-center gap-4">
+              <Icon name="favorite" className="text-3xl text-red-500" filled />
+              <div>
+                <h1 className="text-4xl font-black text-primary font-serif">收藏</h1>
+                <p className="text-secondary">0 张照片</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 空状态内容 */}
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-32 h-32 rounded-2xl bg-red-50 flex items-center justify-center mb-8">
-            <span className="material-symbols-outlined text-6xl text-red-300">favorite</span>
+          {/* 空状态内容 */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-secondary">
+            <div className="w-32 h-32 rounded-2xl bg-red-50 flex items-center justify-center mb-8 border border-red-100">
+              <Icon name="favorite" className="text-6xl text-red-300" />
+            </div>
+
+            <h2 className="text-3xl font-bold text-primary mb-3 font-serif">
+              暂无收藏
+            </h2>
+            <p className="text-secondary text-base mb-8 max-w-md">
+              您还没有收藏任何照片。点击任何照片上的爱心图标即可添加到此处。
+            </p>
+
+            <button
+              onClick={() => navigate('/')}
+              className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-all shadow-md flex items-center gap-2"
+            >
+              <Icon name="photo_library" className="text-xl" />
+              <span>浏览照片</span>
+            </button>
           </div>
-
-          <h2 className="text-3xl font-bold text-on-surface mb-3">
-            暂无收藏
-          </h2>
-          <p className="text-on-surface-variant text-base mb-8 max-w-md">
-            您还没有收藏任何照片。点击任何照片上的爱心图标即可添加到此处。
-          </p>
-
-          <button
-            onClick={() => navigate('/')}
-            className="btn btn-primary gap-2 px-6 py-3 text-base"
-          >
-            <span className="material-symbols-outlined text-xl">photo_library</span>
-            <span>浏览照片</span>
-          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full w-full bg-surface rounded-xl">
-      {/* 页面头部 */}
-      <div className="flex flex-col p-6 pb-0">
-        {/* 标题和操作栏 */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <span className="material-symbols-outlined text-3xl text-red-500 filled">favorite</span>
-            <div>
-              <h1 className="text-on-surface text-4xl font-black leading-tight tracking-tight">收藏</h1>
-              <p className="text-on-surface-variant text-base font-normal">
-                {totalCount} 张照片
-              </p>
+    <div className="h-full w-full p-6 overflow-hidden">
+      <div className="flex flex-col h-full w-full card rounded-2xl border border-border overflow-hidden">
+        {/* 页面头部 */}
+        <div className="flex flex-col p-6 pb-0 bg-surface">
+          {/* 标题和操作栏 */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <Icon name="favorite" className="text-3xl text-red-500" filled />
+              <div>
+                <h1 className="text-primary text-4xl font-black leading-tight tracking-tight font-serif">收藏</h1>
+                <p className="text-secondary text-base font-normal">
+                  {totalCount} 张照片
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 主内容区域 */}
-      <div className="flex-1 min-h-0 mt-6 overflow-y-auto relative">
-        {/* 错误提示 */}
-        {error && (
-          <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-50/90 px-6 py-3 text-sm font-medium text-red-600 shadow-lg backdrop-blur-md ring-1 ring-red-200">
-            <div className="flex items-center space-x-2">
-              <span className="material-symbols-outlined text-lg">error</span>
-              <span>{error}</span>
+        {/* 主内容区域 */}
+        <div className="flex-1 min-h-0 mt-6 overflow-y-auto relative">
+          {/* 错误提示 */}
+          {error && (
+            <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-50/90 px-6 py-3 text-sm font-medium text-red-600 shadow-lg backdrop-blur-md ring-1 ring-red-200">
+              <div className="flex items-center space-x-2">
+                <Icon name="error" className="text-lg" />
+                <span>{error}</span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 选择操作栏 */}
-        {selectedIds.size > 0 && (
-          <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
-            <SelectionAction
-              icon={unfavoriting ? "" : "heart_minus"}
-              label="取消收藏"
-              onClick={handleUnfavorite}
-              disabled={unfavoriting}
-              title="移除收藏"
-            >
-              {unfavoriting && (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
-              )}
-            </SelectionAction>
-          </SelectionToolbar>
-        )}
+          {/* 选择操作栏 */}
+          {selectedIds.size > 0 && (
+            <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
+              <SelectionAction
+                icon={unfavoriting ? "" : "heart_minus"}
+                label="取消收藏"
+                onClick={handleUnfavorite}
+                disabled={unfavoriting}
+                title="移除收藏"
+              >
+                {unfavoriting && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
+                )}
+              </SelectionAction>
+            </SelectionToolbar>
+          )}
 
-        {/* 照片网格 */}
-        {viewMode === 'timeline' ? (
-          <TimelineView
+          {/* 照片网格 */}
+          {viewMode === 'timeline' ? (
+            <TimelineView
+              photos={photos}
+              thumbnailSize={thumbnailSize}
+              hasMore={hasMore}
+              loading={loading}
+              onPhotoClick={handlePhotoClick}
+              onPhotoDoubleClick={handlePhotoDoubleClick}
+              onPhotoContextMenu={handlePhotoContextMenu}
+              onPhotoSelect={handlePhotoSelect}
+              onLoadMore={handleLoadMore}
+            />
+          ) : (
+            <PhotoGrid
+              photos={photos}
+              thumbnailSize={thumbnailSize}
+              loading={loading}
+              hasMore={hasMore}
+              onPhotoClick={handlePhotoClick}
+              onPhotoDoubleClick={handlePhotoDoubleClick}
+              onPhotoContextMenu={handlePhotoContextMenu}
+              onPhotoSelect={handlePhotoSelect}
+              onLoadMore={handleLoadMore}
+            />
+          )}
+        </div>
+
+        {/* 查看器 */}
+        {viewerOpen && viewerPhoto && (
+          <PhotoViewer
+            photo={viewerPhoto}
+            open={viewerOpen}
             photos={photos}
-            thumbnailSize={thumbnailSize}
-            hasMore={hasMore}
-            loading={loading}
-            onPhotoClick={handlePhotoClick}
-            onPhotoDoubleClick={handlePhotoDoubleClick}
-            onPhotoContextMenu={handlePhotoContextMenu}
-            onPhotoSelect={handlePhotoSelect}
-            onLoadMore={handleLoadMore}
-          />
-        ) : (
-          <PhotoGrid
-            photos={photos}
-            thumbnailSize={thumbnailSize}
-            loading={loading}
-            hasMore={hasMore}
-            onPhotoClick={handlePhotoClick}
-            onPhotoDoubleClick={handlePhotoDoubleClick}
-            onPhotoContextMenu={handlePhotoContextMenu}
-            onPhotoSelect={handlePhotoSelect}
-            onLoadMore={handleLoadMore}
+            onClose={handleCloseViewer}
+            onPhotoUpdate={handlePhotoUpdate}
           />
         )}
       </div>
-
-      {/* 查看器 */}
-      {viewerOpen && viewerPhoto && (
-        <PhotoViewer
-          photo={viewerPhoto}
-          open={viewerOpen}
-          photos={photos}
-          onClose={handleCloseViewer}
-          onPhotoUpdate={handlePhotoUpdate}
-        />
-      )}
     </div>
   );
 }

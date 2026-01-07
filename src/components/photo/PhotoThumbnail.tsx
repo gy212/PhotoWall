@@ -3,6 +3,7 @@ import type { MouseEvent } from 'react';
 import clsx from 'clsx';
 import type { Photo, AspectRatioCategory } from '@/types';
 import { useThumbnailProgressive } from '@/hooks';
+import { Icon } from '@/components/common/Icon';
 
 interface PhotoThumbnailProps {
   /** 照片数据 */
@@ -179,7 +180,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       )}
       {hasError && (
         <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900 text-zinc-300">
-          <span className="material-symbols-outlined text-3xl mb-1 opacity-50">broken_image</span>
+          <Icon name="broken_image" className="text-3xl mb-1 opacity-50" />
           <span className="text-[10px] font-medium opacity-70">无法加载</span>
         </div>
       )}
@@ -215,9 +216,9 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           )}
         >
           {selected ? (
-            <span className="material-symbols-outlined text-[14px] font-bold">check</span>
+            <Icon name="check" size={14} className="font-bold" />
           ) : (
-            <span className="material-symbols-outlined text-[14px]">check</span>
+            <Icon name="check" size={14} />
           )}
         </div>
       </div>
@@ -233,7 +234,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       {photo.isFavorite && (
         <div className="absolute top-2 right-2 z-10">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 backdrop-blur-md shadow-sm">
-            <span className="material-symbols-outlined text-[14px] text-white fill-current drop-shadow-md">favorite</span>
+            <Icon name="favorite" size={14} className="text-white fill-current drop-shadow-md" filled />
           </div>
         </div>
       )}

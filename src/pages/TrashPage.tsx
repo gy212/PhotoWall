@@ -11,6 +11,7 @@ import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
+import { Icon } from '@/components/common/Icon';
 import {
   getDeletedPhotos,
   restorePhotos,
@@ -26,11 +27,11 @@ const PAGE_SIZE = 100;
 
 function TrashPage() {
   const navigate = useNavigate();
-  
+
   // 从 store 获取视图设置
   const thumbnailSize = usePhotoStore(state => state.thumbnailSize);
   const viewMode = usePhotoStore(state => state.viewMode);
-  
+
   // 选择相关
   const selectedIds = useSelectionStore(state => state.selectedIds);
   const lastSelectedId = useSelectionStore(state => state.lastSelectedId);
@@ -221,7 +222,7 @@ function TrashPage() {
 
     try {
       const photoIds = Array.from(selectedIds);
-      
+
       await restorePhotos(photoIds);
 
       // 从列表中移除
@@ -249,7 +250,7 @@ function TrashPage() {
 
     try {
       const photoIds = Array.from(selectedIds);
-      
+
       await permanentDeletePhotos(photoIds);
 
       // 从列表中移除
@@ -332,224 +333,228 @@ function TrashPage() {
   // 空状态
   if (photos.length === 0 && !loading && !error) {
     return (
-      <div className="flex h-full w-full flex-col glass-panel rounded-xl">
-        {/* 页面头部 */}
-        <div className="p-6 border-b border-white/10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-3xl text-white/60">delete</span>
-              <div>
-                <h1 className="text-4xl font-black text-white">最近删除</h1>
-                <p className="text-white/60">项目将在 30 天后永久删除。</p>
+      <div className="h-full w-full p-6">
+        <div className="flex h-full w-full flex-col card rounded-2xl border border-border">
+          {/* 页面头部 */}
+          <div className="p-6 border-b border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Icon name="delete" className="text-3xl text-secondary" />
+                <div>
+                  <h1 className="text-4xl font-black text-primary font-serif">最近删除</h1>
+                  <p className="text-secondary">项目将在 30 天后永久删除。</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 空状态内容 */}
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-32 h-32 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-8">
-            <span className="material-symbols-outlined text-6xl text-white/30">delete_sweep</span>
+          {/* 空状态内容 */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-secondary">
+            <div className="w-32 h-32 rounded-2xl bg-background border border-border flex items-center justify-center mb-8">
+              <Icon name="delete_sweep" className="text-6xl text-secondary/30" />
+            </div>
+
+            <h2 className="text-3xl font-bold text-primary mb-3 font-serif">
+              回收站为空
+            </h2>
+            <p className="text-secondary text-base mb-8 max-w-md">
+              没有已删除的照片。您删除的项目将会临时显示在这里。
+            </p>
+
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 px-6 py-3 text-base bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors shadow-md"
+            >
+              <Icon name="photo_library" className="text-xl" />
+              <span>浏览照片</span>
+            </button>
           </div>
-
-          <h2 className="text-3xl font-bold text-white mb-3">
-            回收站为空
-          </h2>
-          <p className="text-white/60 text-base mb-8 max-w-md">
-            没有已删除的照片。您删除的项目将会临时显示在这里。
-          </p>
-
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-6 py-3 text-base bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-500/20"
-          >
-            <span className="material-symbols-outlined text-xl">photo_library</span>
-            <span>浏览照片</span>
-          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full w-full glass-panel rounded-xl">
-      {/* 页面头部 */}
-      <div className="flex flex-col p-6 pb-0">
-        {/* 标题和操作栏 */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div>
-            <h1 className="text-white text-4xl font-bold leading-tight tracking-tight">最近删除</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10">选择</button>
-            {totalCount > 0 && (
-              <button
-                onClick={() => setShowEmptyDialog(true)}
-                className="flex items-center gap-2 h-10 px-4 bg-red-500 text-white hover:bg-red-600 rounded-lg font-medium transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">delete_forever</span>
-                <span>清空回收站</span>
-              </button>
-            )}
-          </div>
-        </div>
-        <p className="text-white/60 text-base font-normal pt-4">
-          项目将在 30 天后永久删除。{totalCount > 0 && `(共 ${totalCount} 项)`}
-        </p>
-      </div>
-
-      {/* 主内容区域 */}
-      <div className="flex-1 min-h-0 mt-4 overflow-y-auto relative">
-        {/* 错误提示 */}
-        {error && (
-          <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-500/20 px-6 py-3 text-sm font-medium text-red-300 shadow-lg backdrop-blur-md border border-red-500/30">
-            <div className="flex items-center space-x-2">
-              <span className="material-symbols-outlined text-lg">error</span>
-              <span>{error}</span>
+    <div className="h-full w-full p-6">
+      <div className="flex flex-col h-full w-full card rounded-2xl border border-border overflow-hidden">
+        {/* 页面头部 */}
+        <div className="flex flex-col p-6 pb-0 bg-surface">
+          {/* 标题和操作栏 */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+            <div>
+              <h1 className="text-primary text-4xl font-bold leading-tight tracking-tight font-serif">最近删除</h1>
             </div>
-          </div>
-        )}
-
-        {/* 选择操作栏 */}
-        {selectedIds.size > 0 && (
-          <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
-            {/* 恢复按钮 */}
-            <SelectionAction
-              icon={restoring ? "" : "restore"}
-              label="恢复"
-              onClick={handleRestore}
-              disabled={restoring}
-              title="恢复"
-            >
-              {restoring && (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
+            <div className="flex items-center gap-3">
+              <button className="px-4 h-10 bg-background hover:bg-hover text-primary rounded-lg font-medium transition-colors border border-border">选择</button>
+              {totalCount > 0 && (
+                <button
+                  onClick={() => setShowEmptyDialog(true)}
+                  className="flex items-center gap-2 h-10 px-4 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors shadow-sm"
+                >
+                  <Icon name="delete_forever" className="text-base" />
+                  <span>清空回收站</span>
+                </button>
               )}
-            </SelectionAction>
-            
-            <SelectionDivider />
+            </div>
+          </div>
+          <p className="text-secondary text-base font-normal pt-4">
+            项目将在 30 天后永久删除。{totalCount > 0 && `(共 ${totalCount} 项)`}
+          </p>
+        </div>
 
-            {/* 永久删除按钮 */}
-            <SelectionAction
-              icon="delete_forever"
-              label="彻底删除"
-              onClick={() => setShowDeleteDialog(true)}
-              title="永久删除"
+        {/* 主内容区域 */}
+        <div className="flex-1 min-h-0 mt-4 overflow-y-auto relative">
+          {/* 错误提示 */}
+          {error && (
+            <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-500/20 px-6 py-3 text-sm font-medium text-red-300 shadow-lg backdrop-blur-md border border-red-500/30">
+              <div className="flex items-center space-x-2">
+                <Icon name="error" className="text-lg" />
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 选择操作栏 */}
+          {selectedIds.size > 0 && (
+            <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
+              {/* 恢复按钮 */}
+              <SelectionAction
+                icon={restoring ? "" : "restore"}
+                label="恢复"
+                onClick={handleRestore}
+                disabled={restoring}
+                title="恢复"
+              >
+                {restoring && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent absolute" />
+                )}
+              </SelectionAction>
+
+              <SelectionDivider />
+
+              {/* 永久删除按钮 */}
+              <SelectionAction
+                icon="delete_forever"
+                label="彻底删除"
+                onClick={() => setShowDeleteDialog(true)}
+                title="永久删除"
+              />
+            </SelectionToolbar>
+          )}
+
+          {/* 照片网格 */}
+          {viewMode === 'timeline' ? (
+            <TimelineView
+              photos={photos}
+              thumbnailSize={thumbnailSize}
+              hasMore={hasMore}
+              loading={loading}
+              onPhotoClick={handlePhotoClick}
+              onPhotoDoubleClick={handlePhotoDoubleClick}
+              onPhotoContextMenu={handlePhotoContextMenu}
+              onPhotoSelect={handlePhotoSelect}
+              onLoadMore={handleLoadMore}
             />
-          </SelectionToolbar>
+          ) : (
+            <PhotoGrid
+              photos={photos}
+              thumbnailSize={thumbnailSize}
+              loading={loading}
+              hasMore={hasMore}
+              onPhotoClick={handlePhotoClick}
+              onPhotoDoubleClick={handlePhotoDoubleClick}
+              onPhotoContextMenu={handlePhotoContextMenu}
+              onPhotoSelect={handlePhotoSelect}
+              onLoadMore={handleLoadMore}
+            />
+          )}
+        </div>
+
+        {/* 查看器 */}
+        {viewerOpen && viewerPhoto && (
+          <PhotoViewer
+            photo={viewerPhoto}
+            open={viewerOpen}
+            photos={photos}
+            onClose={handleCloseViewer}
+            onPhotoUpdate={handlePhotoUpdate}
+          />
         )}
 
-        {/* 照片网格 */}
-        {viewMode === 'timeline' ? (
-          <TimelineView
-            photos={photos}
-            thumbnailSize={thumbnailSize}
-            hasMore={hasMore}
-            loading={loading}
-            onPhotoClick={handlePhotoClick}
-            onPhotoDoubleClick={handlePhotoDoubleClick}
-            onPhotoContextMenu={handlePhotoContextMenu}
-            onPhotoSelect={handlePhotoSelect}
-            onLoadMore={handleLoadMore}
-          />
-        ) : (
-          <PhotoGrid
-            photos={photos}
-            thumbnailSize={thumbnailSize}
-            loading={loading}
-            hasMore={hasMore}
-            onPhotoClick={handlePhotoClick}
-            onPhotoDoubleClick={handlePhotoDoubleClick}
-            onPhotoContextMenu={handlePhotoContextMenu}
-            onPhotoSelect={handlePhotoSelect}
-            onLoadMore={handleLoadMore}
-          />
+        {/* 永久删除确认对话框 */}
+        {showDeleteDialog && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-2xl card p-6 shadow-2xl border border-border">
+              <div className="mb-4 flex items-start space-x-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
+                  <Icon name="warning" className="text-2xl text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-white">永久删除</h3>
+                  <p className="mt-1 text-sm text-white/60">
+                    确定要永久删除这 {selectedIds.size} 张照片吗？<br />
+                    <span className="text-red-400 font-medium">此操作无法撤消！</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowDeleteDialog(false)}
+                  disabled={deleting}
+                  className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handlePermanentDelete}
+                  disabled={deleting}
+                  className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
+                >
+                  {deleting ? '删除中...' : '永久删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 清空回收站确认对话框 */}
+        {showEmptyDialog && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <div className="relative w-full max-w-md rounded-2xl card p-6 shadow-2xl border border-border">
+              <div className="mb-4 flex items-start space-x-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
+                  <Icon name="delete_forever" className="text-2xl text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-white">清空回收站</h3>
+                  <p className="mt-1 text-sm text-white/60">
+                    确定要永久删除回收站中的全部 {totalCount} 张照片吗？<br />
+                    <span className="text-red-400 font-medium">此操作无法撤消！</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowEmptyDialog(false)}
+                  disabled={emptying}
+                  className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleEmptyTrash}
+                  disabled={emptying}
+                  className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
+                >
+                  {emptying ? '清空中...' : '清空回收站'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
-
-      {/* 查看器 */}
-      {viewerOpen && viewerPhoto && (
-        <PhotoViewer
-          photo={viewerPhoto}
-          open={viewerOpen}
-          photos={photos}
-          onClose={handleCloseViewer}
-          onPhotoUpdate={handlePhotoUpdate}
-        />
-      )}
-
-      {/* 永久删除确认对话框 */}
-      {showDeleteDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl glass-card p-6 shadow-2xl border border-white/10">
-            <div className="mb-4 flex items-start space-x-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
-                <span className="material-symbols-outlined text-2xl text-red-400">warning</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white">永久删除</h3>
-                <p className="mt-1 text-sm text-white/60">
-                  确定要永久删除这 {selectedIds.size} 张照片吗？<br />
-                  <span className="text-red-400 font-medium">此操作无法撤消！</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowDeleteDialog(false)}
-                disabled={deleting}
-                className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
-              >
-                取消
-              </button>
-              <button
-                onClick={handlePermanentDelete}
-                disabled={deleting}
-                className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
-              >
-                {deleting ? '删除中...' : '永久删除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 清空回收站确认对话框 */}
-      {showEmptyDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl glass-card p-6 shadow-2xl border border-white/10">
-            <div className="mb-4 flex items-start space-x-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
-                <span className="material-symbols-outlined text-2xl text-red-400">delete_forever</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white">清空回收站</h3>
-                <p className="mt-1 text-sm text-white/60">
-                  确定要永久删除回收站中的全部 {totalCount} 张照片吗？<br />
-                  <span className="text-red-400 font-medium">此操作无法撤消！</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowEmptyDialog(false)}
-                disabled={emptying}
-                className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleEmptyTrash}
-                disabled={emptying}
-                className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
-              >
-                {emptying ? '清空中...' : '清空回收站'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

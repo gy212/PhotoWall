@@ -5,20 +5,33 @@
   "identifier": "com.photowall.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "PhotoWall",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
         "minHeight": 600,
         "decorations": false,
-        "transparent": true
+        "transparent": true,
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "title": "Welcome to PhotoWall Light",
+        "width": 420,
+        "height": 300,
+        "decorations": false,
+        "transparent": true,
+        "resizable": false,
+        "center": true,
+        "url": "splash.html"
       }
     ],
     "security": {

@@ -40,35 +40,37 @@ function AlbumsPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-background text-primary transition-colors">
-      <div className="flex items-center justify-between border-b border-border/40 bg-surface/80 px-6 py-4 backdrop-blur-sm">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">相册</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {albums.length} 个相册 · {albums.reduce((sum, a) => sum + a.photoCount, 0)} 张照片
-          </p>
+    <div className="h-full w-full p-6 bg-background flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col card rounded-2xl border border-border shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border bg-surface px-6 py-4 sticky top-0 z-10">
+          <div>
+            <h1 className="text-2xl font-bold text-primary font-serif">相册</h1>
+            <p className="mt-1 text-sm text-secondary">
+              {albums.length} 个相册 · {albums.reduce((sum, a) => sum + a.photoCount, 0)} 张照片
+            </p>
+          </div>
+          <button
+            onClick={() => setManagerOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-md transition-all hover:bg-primary-dark"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            管理相册
+          </button>
         </div>
-        <button
-          onClick={() => setManagerOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover active:scale-95"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          管理相册
-        </button>
-      </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <AlbumGrid
-          albums={albums}
-          onAlbumClick={handleAlbumClick}
-          onAlbumContextMenu={handleAlbumContextMenu}
-          loading={loading}
-        />
-      </div>
+        <div className="flex-1 overflow-y-auto">
+          <AlbumGrid
+            albums={albums}
+            onAlbumClick={handleAlbumClick}
+            onAlbumContextMenu={handleAlbumContextMenu}
+            loading={loading}
+          />
+        </div>
 
-      <AlbumManager open={managerOpen} onClose={() => setManagerOpen(false)} onAlbumsChange={loadAlbums} />
+        <AlbumManager open={managerOpen} onClose={() => setManagerOpen(false)} onAlbumsChange={loadAlbums} />
+      </div>
     </div>
   );
 }

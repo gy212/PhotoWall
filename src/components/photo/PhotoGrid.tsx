@@ -97,8 +97,8 @@ const GridFooter = memo(function GridFooter({ context }: { context?: PhotoGridVi
 
   return (
     <div className="flex w-full items-center justify-center py-4">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-      <span className="ml-2 text-sm text-gray-500">加载中...</span>
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+      <span className="ml-2 text-sm text-secondary">加载中...</span>
     </div>
   );
 });
@@ -425,10 +425,10 @@ const PhotoGrid = memo(function PhotoGrid({
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+          <h3 className="mt-4 text-lg font-medium text-primary">
             暂无照片
           </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-secondary">
             添加文件夹开始管理您的照片
           </p>
         </div>
@@ -442,14 +442,14 @@ const PhotoGrid = memo(function PhotoGrid({
       <div ref={containerRef} className="w-full" style={{ paddingTop: gap }}>
         {dateGroups.map((group) => (
           <div key={group.date} className="mb-8">
-            {/* 日期分组 Header */}
-            <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface/90 backdrop-blur-xl border border-border/40 rounded-xl">
+            {/* 日期分组 Header - Solid Background */}
+            <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface border-b border-border">
               <div className="flex items-baseline justify-between">
                 <div className="flex items-baseline gap-3">
-                  <h3 className="text-2xl font-bold tracking-tight text-on-surface">
+                  <h3 className="text-2xl font-bold tracking-tight text-primary font-serif">
                     {group.displayDate}
                   </h3>
-                  <span className="text-sm font-medium text-zinc-400">
+                  <span className="text-sm font-medium text-secondary">
                     {group.items.length} 张
                   </span>
                 </div>
@@ -515,8 +515,8 @@ const PhotoGrid = memo(function PhotoGrid({
         )}
         {loading && !hasMore && (
           <div className="flex w-full items-center justify-center py-4">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
-            <span className="ml-2 text-sm text-gray-500">加载中...</span>
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+            <span className="ml-2 text-sm text-secondary">加载中...</span>
           </div>
         )}
       </div>

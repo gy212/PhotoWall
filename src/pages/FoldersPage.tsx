@@ -11,6 +11,7 @@ import { useFolderStore } from '@/stores/folderStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { usePhotoStore } from '@/stores/photoStore';
 import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
+import { Icon } from '@/components/common/Icon';
 import {
   getFolderTree,
   getFolderChildren,
@@ -377,8 +378,8 @@ function FoldersPage() {
           className={clsx(
             'group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
             isSelected
-              ? 'bg-blue-500/20 text-white shadow-[0_0_10px_rgba(59,130,246,0.1)]'
-              : 'hover:bg-white/5 text-white/60 hover:text-white'
+              ? 'bg-primary text-white shadow-md'
+              : 'hover:bg-hover text-secondary hover:text-primary'
           )}
           style={{ paddingLeft: `${level * 1.25 + 0.75}rem` }}
         >
@@ -387,14 +388,21 @@ function FoldersPage() {
             <span
               onClick={(e) => handleToggleExpand(folder, e)}
               className={clsx(
-                'mr-2 flex h-5 w-5 items-center justify-center rounded transition-transform cursor-pointer hover:bg-white/10',
+                'mr-2 flex h-5 w-5 items-center justify-center rounded transition-transform cursor-pointer',
+                isSelected ? 'hover:bg-white/20' : 'hover:bg-black/5',
                 isExpanded && 'rotate-90'
               )}
             >
               {isLoading ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                <div className={clsx(
+                  "h-4 w-4 animate-spin rounded-full border-2 border-t-current",
+                  isSelected ? "border-white/20" : "border-primary/20"
+                )} />
               ) : (
-                <span className="material-symbols-outlined text-base text-white/40">chevron_right</span>
+                <Icon name="chevron_right" className={clsx(
+                  "text-base",
+                  isSelected ? "text-white/80" : "text-secondary"
+                )} />
               )}
             </span>
           ) : (
@@ -402,12 +410,10 @@ function FoldersPage() {
           )}
 
           {/* 文件夹图标 */}
-          <span className={clsx(
-            'material-symbols-outlined mr-2 text-xl',
-            isSelected ? 'text-blue-300' : 'text-white/40 group-hover:text-white/70'
-          )}>
-            {isExpanded ? 'folder_open' : 'folder'}
-          </span>
+          <Icon name={isExpanded ? 'folder_open' : 'folder'} className={clsx(
+            'mr-2 text-xl',
+            isSelected ? 'text-white' : 'text-primary group-hover:text-primary-dark'
+          )} />
 
           {/* 文件夹名称 */}
           <span className="flex-1 truncate text-left" title={folder.path}>{folder.name}</span>
@@ -418,8 +424,8 @@ function FoldersPage() {
               className={clsx(
                 'ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold',
                 isSelected
-                  ? 'bg-blue-500/20 text-white'
-                  : 'bg-white/5 text-white/40'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-surface text-secondary border border-border'
               )}
             >
               {folder.totalPhotoCount}
@@ -440,54 +446,56 @@ function FoldersPage() {
   // 空状态 - 没有文件夹
   if (!loading && folderStats && folderStats.rootFolders.length === 0) {
     return (
-      <div className="flex h-full w-full flex-col glass-panel rounded-xl">
-        {/* 页面头部 */}
-        <div className="p-6 border-b border-white/5">
-          <div className="flex items-center gap-4">
-            <span className="material-symbols-outlined text-3xl text-blue-400">folder</span>
-            <div>
-              <h1 className="text-4xl font-black text-white">文件夹</h1>
-              <p className="text-white/60">按文件夹浏览照片</p>
+      <div className="h-full w-full p-6">
+        <div className="flex h-full w-full flex-col card rounded-2xl border border-border">
+          {/* 页面头部 */}
+          <div className="p-6 border-b border-border">
+            <div className="flex items-center gap-4">
+              <Icon name="folder" className="text-3xl text-primary" />
+              <div>
+                <h1 className="text-4xl font-black text-primary font-serif">文件夹</h1>
+                <p className="text-secondary">按文件夹浏览照片</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 空状态内容 */}
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-white/80">
-          <div className="w-32 h-32 rounded-2xl bg-white/5 flex items-center justify-center mb-8">
-            <span className="material-symbols-outlined text-6xl text-white/20">folder_off</span>
+          {/* 空状态内容 */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-secondary">
+            <div className="w-32 h-32 rounded-2xl bg-background flex items-center justify-center mb-8 border border-border">
+              <Icon name="folder_off" className="text-6xl text-secondary/30" />
+            </div>
+
+            <h2 className="text-3xl font-bold text-primary mb-3 font-serif">
+              暂无文件夹
+            </h2>
+            <p className="text-secondary text-base mb-8 max-w-md">
+              请先从“所有照片”页面导入照片文件夹。
+            </p>
           </div>
-
-          <h2 className="text-3xl font-bold text-white mb-3">
-            暂无文件夹
-          </h2>
-          <p className="text-white/60 text-base mb-8 max-w-md">
-            请先从“所有照片”页面导入照片文件夹。
-          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full w-full glass-panel rounded-xl text-white/90">
-      {/* 左侧文件夹树 */}
-      <div className="w-72 flex-shrink-0 border-r border-white/5 flex flex-col h-full bg-black/20 backdrop-blur-md">
+    <div className="flex h-full w-full gap-6 p-6 overflow-hidden">
+      {/* 左侧文件夹树 - 悬浮卡片 */}
+      <div className="w-80 flex-shrink-0 flex flex-col h-full card rounded-2xl border border-border shadow-sm overflow-hidden">
         {/* 标题 */}
-        <div className="p-4 border-b border-white/5">
-          <h2 className="text-lg font-semibold text-white">文件夹</h2>
+        <div className="p-4 border-b border-border bg-surface sticky top-0 z-10">
+          <h2 className="text-lg font-semibold text-primary font-serif">文件夹</h2>
           {folderStats && (
-            <p className="text-xs text-white/40 mt-1">
+            <p className="text-xs text-secondary mt-1">
               {folderStats.totalFolders} 个文件夹，{folderStats.totalPhotos} 张照片
             </p>
           )}
         </div>
 
         {/* 文件夹列表 */}
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center h-32">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-outline border-t-primary" />
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
             </div>
           ) : (
             <div className="space-y-0.5">
@@ -497,20 +505,20 @@ function FoldersPage() {
         </div>
       </div>
 
-      {/* 右侧内容区 */}
-      <div className="flex-1 flex flex-col h-full relative">
+      {/* 右侧内容区 - 悬浮卡片 */}
+      <div className="flex-1 flex flex-col h-full card rounded-2xl border border-border shadow-sm overflow-hidden relative">
         {/* 工具栏和面包屑 */}
         {selectedFolderPath && (
-          <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/5 bg-black/10 p-4 backdrop-blur-md">
+          <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-border bg-surface p-4">
             {/* 面包屑导航 */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-white/60 text-sm font-medium hover:text-white cursor-pointer">文件夹</span>
+              <span className="text-secondary text-sm font-medium hover:text-primary cursor-pointer transition-colors">文件夹</span>
               {selectedFolderPath.split(/[\\/]/).filter(Boolean).map((segment, index, arr) => (
                 <span key={index} className="flex items-center gap-2">
-                  <span className="text-white/40 text-sm">/</span>
+                  <span className="text-secondary/40 text-sm">/</span>
                   <span className={clsx(
-                    'text-sm font-medium',
-                    index === arr.length - 1 ? 'text-white' : 'text-white/60 hover:text-white cursor-pointer'
+                    'text-sm font-medium transition-colors',
+                    index === arr.length - 1 ? 'text-primary font-bold' : 'text-secondary hover:text-primary cursor-pointer'
                   )}>{segment}</span>
                 </span>
               ))}
@@ -519,9 +527,9 @@ function FoldersPage() {
             {/* 文件夹名称和操作 */}
             <div className="flex justify-between items-center gap-2">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-white">{selectedFolderName}</h2>
+                <h2 className="text-2xl font-bold text-primary font-serif">{selectedFolderName}</h2>
                 {totalPhotoCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-xs font-medium text-white/60">
+                  <span className="px-2 py-0.5 rounded-full bg-background border border-border text-xs font-medium text-secondary">
                     {totalPhotoCount} 张照片
                   </span>
                 )}
@@ -529,14 +537,14 @@ function FoldersPage() {
 
               {/* 选项 */}
               <div className="flex items-center space-x-3">
-                <label className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-white/5 px-2 py-1 rounded-md transition-colors">
+                <label className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-hover px-2 py-1 rounded-md transition-colors select-none">
                   <input
                     type="checkbox"
                     checked={includeSubfolders}
                     onChange={(e) => setIncludeSubfolders(e.target.checked)}
-                    className="rounded border-white/20 bg-transparent text-blue-500 focus:ring-blue-500/50"
+                    className="rounded border-border bg-background text-primary focus:ring-primary/20"
                   />
-                  <span className="text-white/80">包含子文件夹</span>
+                  <span className="text-secondary">包含子文件夹</span>
                 </label>
               </div>
             </div>
@@ -545,9 +553,9 @@ function FoldersPage() {
 
         {/* 照片网格 */}
         {selectedFolderPath ? (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden bg-background/50">
             {error && (
-              <div className="absolute top-20 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-500/20 px-6 py-3 text-sm font-medium text-red-300 shadow-lg backdrop-blur-md border border-red-500/30">
+              <div className="absolute top-20 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-red-50 px-6 py-3 text-sm font-medium text-red-600 shadow-md border border-red-100">
                 {error}
               </div>
             )}
@@ -584,12 +592,12 @@ function FoldersPage() {
             />
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center bg-background/50">
             <div className="text-center">
-              <div className="w-24 h-24 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-6">
-                <span className="material-symbols-outlined text-5xl text-white/20">folder_open</span>
+              <div className="w-24 h-24 rounded-2xl bg-surface border border-border flex items-center justify-center mx-auto mb-6 shadow-sm">
+                <Icon name="folder_open" className="text-5xl text-secondary/40" />
               </div>
-              <p className="text-lg text-white/50">从左侧面板选择一个文件夹</p>
+              <p className="text-lg text-secondary font-medium">从左侧面板选择一个文件夹</p>
             </div>
           </div>
         )}
@@ -608,22 +616,22 @@ function FoldersPage() {
 
       {/* 删除确认对话框 */}
       {showDeleteDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative w-full max-w-md rounded-2xl glass-card p-6 shadow-2xl border border-white/10">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl card p-6 shadow-2xl border border-border">
             <div className="mb-4 flex items-start space-x-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
-                <span className="material-symbols-outlined text-2xl text-red-400">delete</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-500">
+                <Icon name="delete" className="text-2xl" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white">确认删除</h3>
-                <p className="mt-1 text-sm text-white/60">
+                <h3 className="text-lg font-semibold text-primary font-serif">确认删除</h3>
+                <p className="mt-1 text-sm text-secondary">
                   确定要删除这 {selectedIds.size} 张照片吗？它们将被移到回收站。
                 </p>
               </div>
             </div>
 
             {deleteError && (
-              <div className="mb-4 rounded-lg bg-red-500/20 px-4 py-3 text-sm text-red-300 border border-red-500/30">
+              <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-100">
                 {deleteError}
               </div>
             )}
@@ -632,14 +640,14 @@ function FoldersPage() {
               <button
                 onClick={() => setShowDeleteDialog(false)}
                 disabled={deleting}
-                className="flex-1 h-10 bg-white/5 hover:bg-white/10 text-white/80 rounded-lg font-medium transition-colors border border-white/10"
+                className="flex-1 h-10 bg-surface hover:bg-hover text-secondary rounded-lg font-medium transition-colors border border-border"
               >
                 取消
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors"
+                className="flex-1 h-10 bg-red-600 text-white hover:bg-red-700 rounded-lg font-medium transition-colors shadow-sm"
               >
                 {deleting ? '删除中...' : '删除'}
               </button>

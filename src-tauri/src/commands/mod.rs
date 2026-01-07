@@ -14,7 +14,6 @@ pub mod folder_sync;
 pub mod folders;
 pub mod logging;
 pub mod window_effects;
-pub mod desktop_blur;
 
 pub use greet::*;
 pub use scanner::*;
@@ -28,4 +27,3 @@ pub use folder_sync::*;
 pub use folders::*;
 pub use logging::*;
 pub use window_effects::*;
-pub use desktop_blur::*;

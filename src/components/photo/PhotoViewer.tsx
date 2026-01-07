@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { getAssetUrl, setPhotoRating, setPhotoFavorite, getRawPreview, isRawFile } from '@/services/api';
 import { useThumbnail } from '@/hooks/useThumbnail';
 import type { Photo } from '@/types';
+import { Icon } from '@/components/common/Icon';
 
 interface PhotoViewerProps {
   /** 当前照片 */
@@ -41,7 +42,7 @@ const PhotoViewer = memo(function PhotoViewer({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isPlaying, setIsPlaying] = useState(false);
-  
+
   // 渐进式加载状态
   const [isFullLoaded, setIsFullLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -301,171 +302,119 @@ const PhotoViewer = memo(function PhotoViewer({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90">
-      {/* 顶部工具栏 */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/50 to-transparent p-4">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-white/80">
-            {currentIndex + 1} / {photos.length || 1}
-          </span>
-        </div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
+      {/* 顶部工具栏 - 统一悬浮条 */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+        {/* 统一控制栏 */}
+        <div className="flex items-center h-12 px-2 rounded-2xl bg-surface/95 backdrop-blur-md shadow-xl border border-white/20 ring-1 ring-black/5">
 
-        <div className="flex items-center space-x-2">
+          {/* 计数器 */}
+          <div className="px-3 text-sm font-medium text-secondary border-r border-border/50 pr-4 mr-1">
+            <span className="tabular-nums">{currentIndex + 1}</span>
+            <span className="mx-1 opacity-50">/</span>
+            <span className="tabular-nums">{photos.length || 1}</span>
+          </div>
+
           {/* 缩放控制 */}
-          <button
-            className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
-            onClick={() => {
-              setScale((s) => {
-                const newScale = Math.max(s - 0.25, 0.5);
-                if (newScale === 1) setPosition({ x: 0, y: 0 });
-                return newScale;
-              });
-            }}
-            title="缩小 (-)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
-          </button>
-          <span className="min-w-[4rem] text-center text-sm text-white/80">
-            {Math.round(scale * 100)}%
-          </span>
-          <button
-            className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
-            onClick={() => {
-              setScale((s) => {
-                const newScale = Math.min(s + 0.25, 3);
-                if (newScale === 1) setPosition({ x: 0, y: 0 });
-                return newScale;
-              });
-            }}
-            title="放大 (+)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          <button
-            className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
-            onClick={() => {
-              setScale(1);
-              setPosition({ x: 0, y: 0 });
-            }}
-            title="重置 (0)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-              />
-            </svg>
-          </button>
-
-          <div className="mx-2 h-6 w-px bg-white/30" />
-
-          {/* 幻灯片播放 */}
-          <button
-            className={clsx(
-              'rounded-full p-2 hover:bg-white/10',
-              isPlaying ? 'text-green-400' : 'text-white/80 hover:text-white'
-            )}
-            onClick={toggleSlideshow}
-            disabled={!hasNext}
-            title={isPlaying ? '暂停幻灯片 (空格)' : '播放幻灯片 (空格)'}
-          >
-            {isPlaying ? (
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            ) : (
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )}
-          </button>
-
-          <div className="mx-2 h-6 w-px bg-white/30" />
-
-          {/* 收藏 */}
-          <button
-            className={clsx(
-              'rounded-full p-2 hover:bg-white/10',
-              localPhoto.isFavorite ? 'text-red-500' : 'text-white/80 hover:text-white'
-            )}
-            onClick={toggleFavorite}
-            title={localPhoto.isFavorite ? '取消收藏' : '收藏'}
-          >
-            <svg
-              className="h-5 w-5"
-              fill={localPhoto.isFavorite ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center">
+            <button
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              onClick={() => setScale(s => Math.max(s - 0.25, 0.5))}
+              title="缩小"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              />
-            </svg>
-          </button>
+              <Icon name="remove" className="text-xl" />
+            </button>
+            <span className="w-14 text-center text-sm font-semibold text-primary tabular-nums">
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              onClick={() => setScale(s => Math.min(s + 0.25, 3))}
+              title="放大"
+            >
+              <Icon name="add" className="text-xl" />
+            </button>
+          </div>
 
-          {/* 信息面板切换 */}
-          <button
-            className={clsx(
-              'rounded-full p-2 hover:bg-white/10',
-              showInfo ? 'text-blue-400' : 'text-white/80 hover:text-white'
-            )}
-            onClick={() => setShowInfo(!showInfo)}
-            title="照片信息 (I)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </button>
+          <div className="w-px h-5 bg-border/50 mx-2" />
 
-          {/* 关闭 */}
-          <button
-            className="rounded-full p-2 text-white/80 hover:bg-white/10 hover:text-white"
-            onClick={onClose}
-            title="关闭 (Esc)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* 常用操作 */}
+          <div className="flex items-center gap-1">
+            <button
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              onClick={() => { setScale(1); setPosition({ x: 0, y: 0 }); }}
+              title="重置视图"
+            >
+              <Icon name="center_focus_weak" className="text-xl" />
+            </button>
+
+            <button
+              className={clsx(
+                'p-2 rounded-xl transition-all',
+                isPlaying ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-black/5'
+              )}
+              onClick={toggleSlideshow}
+              disabled={!hasNext}
+              title="幻灯片播放"
+            >
+              <Icon name={isPlaying ? 'close' : 'start_scan'} className="text-xl" />
+            </button>
+
+            <button
+              className={clsx(
+                'p-2 rounded-xl transition-all',
+                localPhoto.isFavorite ? 'text-red-500 bg-red-50' : 'text-secondary hover:text-primary hover:bg-black/5'
+              )}
+              onClick={toggleFavorite}
+              title="收藏"
+            >
+              <Icon
+                name="favorite"
+                className="text-xl"
+                filled={localPhoto.isFavorite}
+              />
+            </button>
+
+            <button
+              className={clsx(
+                'p-2 rounded-xl transition-all',
+                showInfo ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-black/5'
+              )}
+              onClick={() => setShowInfo(!showInfo)}
+              title="信息"
+            >
+              <Icon name="info" className="text-xl" />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* 关闭按钮 - 独立左上角 - 退出图标 */}
+      <button
+        className="absolute top-4 left-4 z-20 p-3 rounded-full bg-surface/90 backdrop-blur shadow-lg border border-white/20 ring-1 ring-black/5 text-secondary hover:text-primary hover:bg-white hover:scale-105 transition-all"
+        onClick={onClose}
+        title="返回 (Esc)"
+      >
+        <Icon name="arrow_back" className="text-2xl" />
+      </button>
 
       {/* 导航按钮 */}
       {hasPrev && (
         <button
-          className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white/80 hover:bg-black/70 hover:text-white"
-          onClick={goPrev}
+          className="absolute left-6 top-1/2 z-20 -translate-y-1/2 h-12 w-12 flex items-center justify-center rounded-full bg-surface shadow-lg border border-border text-secondary hover:text-primary hover:scale-110 transition-all"
+          onClick={(e) => { e.stopPropagation(); goPrev(); }}
           title="上一张 (←)"
         >
-          <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
+          <Icon name="chevron_left" className="text-3xl" />
         </button>
       )}
       {hasNext && (
         <button
-          className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white/80 hover:bg-black/70 hover:text-white"
-          onClick={goNext}
+          className="absolute right-6 top-1/2 z-20 -translate-y-1/2 h-12 w-12 flex items-center justify-center rounded-full bg-surface shadow-lg border border-border text-secondary hover:text-primary hover:scale-110 transition-all"
+          onClick={(e) => { e.stopPropagation(); goNext(); }}
           title="下一张 (→)"
         >
-          <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <Icon name="chevron_right" className="text-3xl" />
         </button>
       )}
 
@@ -484,28 +433,23 @@ const PhotoViewer = memo(function PhotoViewer({
         {/* 加载指示器 */}
         {isFullLoading && (
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            <div className="flex flex-col items-center space-y-3">
-              <svg className="h-10 w-10 animate-spin text-white/60" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <span className="text-sm text-white/60">加载高清图片...</span>
+            <div className="flex flex-col items-center space-y-3 bg-surface/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg border border-border">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+              <span className="text-sm text-secondary">加载高清图片...</span>
             </div>
           </div>
         )}
-        
+
         {/* 错误提示 */}
         {loadError && (
           <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            <div className="flex flex-col items-center space-y-3 text-red-400">
-              <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <span className="text-sm">图片加载失败</span>
+            <div className="flex flex-col items-center space-y-3 p-6 bg-surface rounded-2xl shadow-lg border border-border">
+              <Icon name="error" className="text-4xl text-red-500" size={36} />
+              <span className="text-sm text-secondary">图片加载失败</span>
             </div>
           </div>
         )}
-        
+
         {/* 缩略图占位 (isFullLoaded 为 false 时显示) */}
         {!isFullLoaded && placeholderUrl && !loadError && (
           <img
@@ -522,7 +466,7 @@ const PhotoViewer = memo(function PhotoViewer({
             draggable={false}
           />
         )}
-        
+
         {/* 原图 - 始终渲染，通过 opacity 控制显示 */}
         {fullImageUrl && (
           <img
@@ -545,101 +489,93 @@ const PhotoViewer = memo(function PhotoViewer({
         )}
       </div>
 
-      {/* 底部评分 */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-center bg-gradient-to-t from-black/50 to-transparent p-4">
-        <div className="flex items-center space-x-1">
+      {/* 底部评分 - 优化样式 */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
+        <div className="flex items-center space-x-2 px-6 py-3 bg-surface/90 backdrop-blur shadow-2xl border border-white/20 ring-1 ring-black/5 rounded-2xl">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
               key={star}
-              className="p-1 transition-transform hover:scale-110"
+              className="group p-1 transition-transform hover:scale-110"
               onClick={() => handleRating(star)}
               title={`${star} 星`}
             >
-              <svg
+              <Icon
+                name="star"
                 className={clsx(
-                  'h-6 w-6',
-                  star <= localPhoto.rating ? 'text-yellow-400' : 'text-white/40 hover:text-white/60'
+                  "text-2xl transition-all",
+                  star <= localPhoto.rating
+                    ? "text-yellow-400 drop-shadow-sm"
+                    : "text-secondary/20 group-hover:text-yellow-400"
                 )}
-                fill={star <= localPhoto.rating ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                />
-              </svg>
+                filled={star <= localPhoto.rating}
+              />
             </button>
           ))}
         </div>
       </div>
 
-      {/* 信息面板 */}
+      {/* 信息面板 - 侧边栏 */}
       {showInfo && (
         <div
-          className="absolute bottom-0 right-0 top-0 z-20 w-80 overflow-y-auto bg-gray-900/95 p-4"
+          className="absolute right-4 top-20 bottom-24 z-20 w-80 overflow-y-auto bg-surface/95 backdrop-blur-xl p-6 rounded-2xl shadow-xl border border-border"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">照片信息</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold text-primary font-serif">照片信息</h3>
             <button
               onClick={() => setShowInfo(false)}
-              className="rounded-full p-1.5 text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+              className="rounded-full p-1 text-secondary hover:bg-hover hover:text-primary transition-colors"
               title="关闭信息面板"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="text-xl" />
             </button>
           </div>
 
-          <div className="space-y-4 text-sm">
+          <div className="space-y-6 text-sm">
             {/* 基本信息 */}
             <section>
-              <h4 className="mb-2 font-medium text-gray-400">基本信息</h4>
-              <dl className="space-y-1">
+              <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">基本信息</h4>
+              <dl className="space-y-2">
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">文件名</dt>
-                  <dd className="max-w-[180px] truncate text-white" title={localPhoto.fileName}>
+                  <dt className="text-secondary">文件名</dt>
+                  <dd className="max-w-[160px] truncate text-primary font-medium" title={localPhoto.fileName}>
                     {localPhoto.fileName}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">格式</dt>
-                  <dd className="text-white">{localPhoto.format || '未知'}</dd>
+                  <dt className="text-secondary">格式</dt>
+                  <dd className="text-primary font-medium">{localPhoto.format || '未知'}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">尺寸</dt>
-                  <dd className="text-white">
+                  <dt className="text-secondary">尺寸</dt>
+                  <dd className="text-primary font-medium">
                     {localPhoto.width && localPhoto.height
                       ? `${localPhoto.width} × ${localPhoto.height}`
                       : '未知'}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">大小</dt>
-                  <dd className="text-white">{formatFileSize(localPhoto.fileSize)}</dd>
+                  <dt className="text-secondary">大小</dt>
+                  <dd className="text-primary font-medium">{formatFileSize(localPhoto.fileSize)}</dd>
                 </div>
               </dl>
             </section>
 
             {/* 日期信息 */}
             <section>
-              <h4 className="mb-2 font-medium text-gray-400">日期</h4>
-              <dl className="space-y-1">
+              <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">日期</h4>
+              <dl className="space-y-2">
                 {localPhoto.dateTaken && (
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">拍摄时间</dt>
-                    <dd className="text-white">
+                    <dt className="text-secondary">拍摄时间</dt>
+                    <dd className="text-primary font-medium">
                       {format(new Date(localPhoto.dateTaken), 'yyyy-MM-dd HH:mm')}
                     </dd>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">添加时间</dt>
-                  <dd className="text-white">
+                  <dt className="text-secondary">添加时间</dt>
+                  <dd className="text-primary font-medium">
                     {format(new Date(localPhoto.dateAdded), 'yyyy-MM-dd HH:mm')}
                   </dd>
                 </div>
@@ -649,18 +585,18 @@ const PhotoViewer = memo(function PhotoViewer({
             {/* 相机信息 */}
             {(localPhoto.cameraModel || localPhoto.lensModel) && (
               <section>
-                <h4 className="mb-2 font-medium text-gray-400">相机</h4>
-                <dl className="space-y-1">
+                <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">相机</h4>
+                <dl className="space-y-2">
                   {localPhoto.cameraModel && (
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">相机</dt>
-                      <dd className="text-white">{localPhoto.cameraModel}</dd>
+                      <dt className="text-secondary">相机</dt>
+                      <dd className="text-primary font-medium">{localPhoto.cameraModel}</dd>
                     </div>
                   )}
                   {localPhoto.lensModel && (
                     <div className="flex justify-between">
-                      <dt className="text-gray-500">镜头</dt>
-                      <dd className="max-w-[180px] truncate text-white" title={localPhoto.lensModel}>
+                      <dt className="text-secondary">镜头</dt>
+                      <dd className="max-w-[160px] truncate text-primary font-medium" title={localPhoto.lensModel}>
                         {localPhoto.lensModel}
                       </dd>
                     </div>
@@ -672,48 +608,48 @@ const PhotoViewer = memo(function PhotoViewer({
             {/* 拍摄参数 */}
             {(localPhoto.focalLength || localPhoto.aperture || localPhoto.iso || localPhoto.shutterSpeed) && (
               <section>
-                <h4 className="mb-2 font-medium text-gray-400">拍摄参数</h4>
-                <dl className="space-y-1">
+                <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">拍摄参数</h4>
+                <div className="grid grid-cols-2 gap-2">
                   {localPhoto.focalLength && (
-                    <div className="flex justify-between">
-                      <dt className="text-gray-500">焦距</dt>
-                      <dd className="text-white">{localPhoto.focalLength}mm</dd>
+                    <div className="bg-background rounded p-2 text-center">
+                      <div className="text-xs text-secondary">焦距</div>
+                      <div className="text-primary font-bold">{localPhoto.focalLength}mm</div>
                     </div>
                   )}
                   {localPhoto.aperture && (
-                    <div className="flex justify-between">
-                      <dt className="text-gray-500">光圈</dt>
-                      <dd className="text-white">f/{localPhoto.aperture}</dd>
+                    <div className="bg-background rounded p-2 text-center">
+                      <div className="text-xs text-secondary">光圈</div>
+                      <div className="text-primary font-bold">f/{localPhoto.aperture}</div>
                     </div>
                   )}
                   {localPhoto.shutterSpeed && (
-                    <div className="flex justify-between">
-                      <dt className="text-gray-500">快门</dt>
-                      <dd className="text-white">{localPhoto.shutterSpeed}</dd>
+                    <div className="bg-background rounded p-2 text-center">
+                      <div className="text-xs text-secondary">快门</div>
+                      <div className="text-primary font-bold">{localPhoto.shutterSpeed}</div>
                     </div>
                   )}
                   {localPhoto.iso && (
-                    <div className="flex justify-between">
-                      <dt className="text-gray-500">ISO</dt>
-                      <dd className="text-white">{localPhoto.iso}</dd>
+                    <div className="bg-background rounded p-2 text-center">
+                      <div className="text-xs text-secondary">ISO</div>
+                      <div className="text-primary font-bold">{localPhoto.iso}</div>
                     </div>
                   )}
-                </dl>
+                </div>
               </section>
             )}
 
             {/* GPS 信息 */}
             {localPhoto.gpsLatitude && localPhoto.gpsLongitude && (
               <section>
-                <h4 className="mb-2 font-medium text-gray-400">位置</h4>
-                <dl className="space-y-1">
+                <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">位置</h4>
+                <dl className="space-y-2">
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">纬度</dt>
-                    <dd className="text-white">{localPhoto.gpsLatitude.toFixed(6)}</dd>
+                    <dt className="text-secondary">纬度</dt>
+                    <dd className="text-primary font-medium text-xs font-mono">{localPhoto.gpsLatitude.toFixed(6)}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-gray-500">经度</dt>
-                    <dd className="text-white">{localPhoto.gpsLongitude.toFixed(6)}</dd>
+                    <dt className="text-secondary">经度</dt>
+                    <dd className="text-primary font-medium text-xs font-mono">{localPhoto.gpsLongitude.toFixed(6)}</dd>
                   </div>
                 </dl>
               </section>
@@ -721,8 +657,8 @@ const PhotoViewer = memo(function PhotoViewer({
 
             {/* 文件路径 */}
             <section>
-              <h4 className="mb-2 font-medium text-gray-400">文件路径</h4>
-              <p className="break-all text-xs text-gray-300">{localPhoto.filePath}</p>
+              <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">文件路径</h4>
+              <p className="break-all text-xs text-secondary bg-background p-2 rounded selectable">{localPhoto.filePath}</p>
             </section>
           </div>
         </div>

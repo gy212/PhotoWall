@@ -9,22 +9,20 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
-        display: ['Inter', 'sans-serif'],
+        serif: ['"Noto Serif SC"', 'serif'], // Added Serif
+        display: ['"Noto Serif SC"', 'serif'], // Use Serif for display
       },
       colors: {
         // 新UI设计主色
         primary: {
-          DEFAULT: '#007aff',
-          light: '#e6f2ff',
-          dark: '#005ec4',
-          100: '#e5f2ff',
-          900: '#005ec4',
+          DEFAULT: 'var(--primary)', // Link to CSS var
+          light: 'var(--primary-light)',
+          dark: 'var(--primary-dark)',
         },
         // 新UI设计强调色
         accent: {
-          DEFAULT: '#7DA0C0',
-          hover: '#93B2CE',
-          bg: 'rgba(125, 160, 192, 0.15)'
+          DEFAULT: 'var(--primary)',
+          hover: 'var(--primary-dark)',
         },
         navy: {
           900: '#0f172a',

@@ -11,8 +11,10 @@ import ContentShelf from '@/components/dashboard/ContentShelf';
 import { PhotoGrid, PhotoViewer } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { getPhotosCursor, searchPhotosCursor } from '@/services/api';
+import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
+import { Icon } from '@/components/common/Icon';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getPhotosCursor, searchPhotosCursor, setPhotosFavorite, softDeletePhotos } from '@/services/api';
 import type { Photo, PhotoCursor, SearchFilters, SortField } from '@/types';
 
 const PAGE_SIZE = 100;
@@ -143,6 +145,12 @@ export default function HomePage() {
     setViewerOpen(true);
   }, []);
 
+  // 用于 ContentShelf 的单击打开查看器
+  const handleShelfPhotoClick = useCallback((photo: Photo) => {
+    setViewerPhoto(photo);
+    setViewerOpen(true);
+  }, []);
+
   const handleCloseViewer = useCallback(() => {
     setViewerOpen(false);
   }, []);
@@ -156,10 +164,56 @@ export default function HomePage() {
     console.log('[HomePage] recentPhotos count:', recentPhotos.length);
   }, [isTauriRuntime, feedLoading, feedError, recentLoading, recentError, photos.length, recentPhotos.length]);
 
+  // --- Selection Actions ---
+  const queryClient = useQueryClient();
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
+  // 批量移动到回收站
+  const handleMoveToTrash = async () => {
+    if (selectedIds.size === 0) return;
+    setIsActionLoading(true);
+    try {
+      await softDeletePhotos(Array.from(selectedIds));
+      clearSelection();
+      // Invalidate queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['photoFeed'] });
+      queryClient.invalidateQueries({ queryKey: ['recentPhotos'] });
+      // Optimistic update logic could be added here for better UX, 
+      // but invalidation handles correctness.
+    } catch (error) {
+      console.error('Failed to move photos to trash:', error);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // 批量收藏/取消收藏 (此处简化为统一设为收藏，或根据第一个状态反转)
+  // For simplicity: toggle favorite for all selected based on the first one's state or just favorite all.
+  // A better UX might be: if any un-favorited, favorite all. If all favorited, un-favorite all.
+  const handleToggleFavorite = async () => {
+    if (selectedIds.size === 0) return;
+    setIsActionLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const selectedPhotos = photos.filter((photo) => selectedIds.has(photo.photoId));
+      const allSelectedFavorited =
+        selectedPhotos.length > 0 && selectedPhotos.every((photo) => photo.isFavorite);
+      await setPhotosFavorite(ids, !allSelectedFavorited);
+
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ['photoFeed'] });
+      queryClient.invalidateQueries({ queryKey: ['recentPhotos'] });
+    } catch (error) {
+      console.error('Failed to toggle favorites:', error);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   return (
     <div
       ref={scrollContainerRef}
-      className="h-full overflow-y-auto no-scrollbar p-8 space-y-10"
+      className="h-full overflow-y-auto no-scrollbar p-8 space-y-10 relative"
     >
       {/* 仪表盘区域 */}
       <HeroSection />
@@ -171,28 +225,29 @@ export default function HomePage() {
         icon="schedule"
         photos={recentPhotos}
         loading={recentLoading}
+        onPhotoClick={handleShelfPhotoClick}
       />
 
       {/* 全部照片区域 (Grid) */}
       <section className="min-h-[500px]">
         <div className="flex items-center justify-between mb-4 px-1">
-          <h3 className="text-lg font-semibold flex items-center gap-2 text-white/90">
-            <span className="material-symbols-outlined text-blue-300 text-xl">grid_view</span>
+          <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
+            <Icon name="grid_view" className="text-primary text-xl" />
             全部照片
           </h3>
-          <span className="text-sm text-white/40">{totalCount} 张</span>
+          <span className="text-sm text-secondary">{totalCount} 张</span>
         </div>
 
         {/* 错误提示 */}
         {feedError && (
-          <div className="glass-panel rounded-2xl p-8 border border-red-500/20 text-center">
-            <span className="material-symbols-outlined text-4xl text-red-400 mb-4">error</span>
-            <p className="text-red-400">加载照片失败，请检查数据库连接</p>
+          <div className="card rounded-2xl p-8 border border-red-500/20 text-center">
+            <Icon name="error" className="text-4xl text-red-500 mb-4" />
+            <p className="text-red-500">加载照片失败，请检查数据库连接</p>
           </div>
         )}
 
         {!feedError && (
-          <div className="w-full glass-panel rounded-2xl overflow-hidden p-4 border border-white/5">
+          <div className="w-full card rounded-2xl overflow-hidden p-4 border border-border">
             <PhotoGrid
               photos={photos}
               loading={loading}
@@ -210,11 +265,37 @@ export default function HomePage() {
         )}
       </section>
 
+      {/* 底部悬浮选择栏 */}
+      <div className="fixed bottom-8 left-0 right-0 flex justify-center pointer-events-none z-50">
+        {selectedIds.size > 0 && (
+          <div className="pointer-events-auto">
+            <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
+              <SelectionAction
+                icon="favorite"
+                label="收藏"
+                onClick={handleToggleFavorite}
+                disabled={isActionLoading}
+              />
+              <SelectionDivider />
+              <SelectionAction
+                icon="delete"
+                label="删除"
+                className="hover:bg-red-500/20 text-red-400 group-hover:text-red-300"
+                iconClassName="text-red-400"
+                labelClassName="text-red-400"
+                onClick={handleMoveToTrash}
+                disabled={isActionLoading}
+              />
+            </SelectionToolbar>
+          </div>
+        )}
+      </div>
+
       {viewerPhoto && (
         <PhotoViewer
           photo={viewerPhoto}
           open={viewerOpen}
-          photos={photos}
+          photos={recentPhotos.some(p => p.photoId === viewerPhoto.photoId) ? recentPhotos : photos}
           onClose={handleCloseViewer}
         />
       )}

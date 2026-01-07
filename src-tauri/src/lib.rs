@@ -48,7 +48,18 @@ use commands::{
     // file_ops
     import_photos, export_photos, delete_photos, move_photo, copy_photo, batch_rename_photos,
     // settings
-    get_settings, save_settings, reset_settings, apply_window_settings,
+    get_settings,
+    save_settings,
+    reset_settings,
+    apply_window_settings,
+    clear_blur_cache,
+    set_exclude_from_capture,
+    get_blurred_desktop,
+    is_composition_blur_supported,
+    enable_composition_blur,
+    disable_composition_blur,
+    set_composition_blur_radius,
+    set_composition_tint,
     // folder_sync
     get_sync_folders, add_sync_folder, remove_sync_folder, set_auto_sync_enabled,
     get_auto_sync_enabled, trigger_sync_now, validate_folder_path,
@@ -56,11 +67,6 @@ use commands::{
     get_folder_tree, get_folder_children, get_photos_by_folder, get_folder_photo_count,
     // logging
     log_frontend,
-    // desktop_blur
-    get_blurred_desktop, set_exclude_from_capture, clear_blur_cache,
-    // composition_backdrop (Windows 11+)
-    is_composition_blur_supported, enable_composition_blur, disable_composition_blur,
-    set_composition_blur_radius, set_composition_tint,
 };
 use db::Database;
 
@@ -238,6 +244,14 @@ pub fn run() {
             save_settings,
             reset_settings,
             apply_window_settings,
+            clear_blur_cache,
+            set_exclude_from_capture,
+            get_blurred_desktop,
+            is_composition_blur_supported,
+            enable_composition_blur,
+            disable_composition_blur,
+            set_composition_blur_radius,
+            set_composition_tint,
             // folder_sync
             get_sync_folders,
             add_sync_folder,
@@ -253,16 +267,6 @@ pub fn run() {
             get_folder_photo_count,
             // logging
             log_frontend,
-            // desktop_blur
-            get_blurred_desktop,
-            set_exclude_from_capture,
-            clear_blur_cache,
-            // composition_backdrop (Windows 11+)
-            is_composition_blur_supported,
-            enable_composition_blur,
-            disable_composition_blur,
-            set_composition_blur_radius,
-            set_composition_tint,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

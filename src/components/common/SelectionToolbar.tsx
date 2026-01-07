@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import { Icon, IconName } from '@/components/common/Icon';
 
 interface SelectionToolbarProps {
   selectedCount: number;
@@ -17,7 +18,7 @@ export function SelectionToolbar({
   return (
     <div
       className={clsx(
-        'absolute bottom-8 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-on-surface/90 backdrop-blur-xl px-4 py-2 text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-300',
+        'absolute bottom-8 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-300 ring-1 ring-white/20',
         className
       )}
     >
@@ -36,9 +37,7 @@ export function SelectionToolbar({
         className="group flex flex-col items-center justify-center w-14 h-14 rounded-xl hover:bg-white/10 transition-all active:scale-90"
         title="取消选择"
       >
-        <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">
-          close
-        </span>
+        <Icon name="close" className="text-2xl group-hover:rotate-90 transition-transform" />
         <span className="text-[10px] font-medium mt-0.5">取消</span>
       </button>
     </div>
@@ -69,14 +68,13 @@ export function SelectionAction({
       )}
       {...props}
     >
-      <span
+      <Icon
+        name={icon as IconName}
         className={clsx(
-          'material-symbols-outlined text-2xl group-hover:scale-110 transition-transform',
+          'text-2xl group-hover:scale-110 transition-transform',
           iconClassName
         )}
-      >
-        {icon}
-      </span>
+      />
       <span className={clsx('text-[10px] font-medium mt-0.5', labelClassName)}>{label}</span>
       {children}
     </button>

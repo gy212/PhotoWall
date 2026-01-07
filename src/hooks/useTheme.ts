@@ -1,35 +1,35 @@
 /**
- * 主题管理 Hook - 简化版（固定深色主题）
+ * 主题管理 Hook - 简化版（固定浅色主题）
  */
 
 import { create } from 'zustand';
 
 interface ThemeState {
-  /** 主题模式（固定为 dark） */
-  theme: 'dark';
+  /** 主题模式 */
+  theme: 'light';
   /** 实际使用的主题 */
-  resolvedTheme: 'dark';
-  /** 设置主题（保留接口兼容性，但不做任何事） */
+  resolvedTheme: 'light';
+  /** 设置主题 */
   setTheme: (theme: string) => void;
 }
 
 /**
- * 应用深色主题到 DOM
+ * 移除深色主题类
  */
-function applyDarkTheme() {
+function applyLightTheme() {
   if (typeof window !== 'undefined') {
-    document.documentElement.classList.add('dark');
+    document.documentElement.classList.remove('dark');
   }
 }
 
-// 立即应用深色主题
-applyDarkTheme();
+// 立即应用浅色主题
+applyLightTheme();
 
 export const useTheme = create<ThemeState>()(() => ({
-  theme: 'dark',
-  resolvedTheme: 'dark',
+  theme: 'light',
+  resolvedTheme: 'light',
   setTheme: () => {
-    // 固定深色主题，不做任何切换
-    applyDarkTheme();
+    // 固定浅色主题
+    applyLightTheme();
   },
 }));
