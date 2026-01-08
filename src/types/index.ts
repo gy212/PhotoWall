@@ -329,15 +329,11 @@ export interface PerformanceSettings {
   enableWal: boolean;
 }
 
-export interface WindowSettings {
-  /** 窗口背景不透明度 (0.0 - 1.0) */
-  opacity: number;
-  /** 窗口透明度 (0-100) */
-  transparency: number;
-  /** 模糊半径 (0-100) */
-  blurRadius: number;
-  /** 是否启用自定义桌面模糊 */
-  customBlurEnabled: boolean;
+export interface AppearanceConfig {
+  /** 主题色 (Hex) */
+  themeColor: string;
+  /** 字体大小缩放 (0.8 - 1.2) */
+  fontSizeScale: number;
 }
 
 /**
@@ -354,8 +350,8 @@ export interface AppSettings {
   thumbnail: ThumbnailSettings;
   /** 性能设置 */
   performance: PerformanceSettings;
-  /** 窗口设置 */
-  window: WindowSettings;
+  /** 外观设置 */
+  appearance: AppearanceConfig;
 }
 
 // ============ 文件夹视图类型 ============

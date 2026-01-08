@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
 
 @theme {
   --color-background: var(--color-background);
@@ -17,44 +16,64 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
+/* Global Scrollbar Styles - Force Override */
+html *::-webkit-scrollbar,
+body *::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+  background-color: transparent !important;
+}
+
+html *::-webkit-scrollbar-track,
+body *::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background-color: transparent !important;
+}
+
+html *::-webkit-scrollbar-thumb,
+body *::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(133, 128, 121, 0.4) !important;
+  border-radius: 9999px !important;
+}
+
+html *::-webkit-scrollbar-thumb:hover,
+body *::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(133, 128, 121, 0.6) !important;
+}
+
 @layer base {
   :root {
-    /* === 温暖·实体 (Warm Solid) - Light Theme === */
+    /* === Claude + Cursor Style - Light Theme === */
 
-    /* 核心色调 */
-    --primary: #C15F3C;
-    /* Claude Style - Crail/Terracotta */
-    --primary-light: #D57A5A;
-    --primary-dark: #A04A2B;
+    /* 核心色调 - Claude Terracotta */
+    --primary: #DA7756;
+    --primary-light: #E8957A;
+    --primary-dark: #C45D3A;
 
-    /* 背景体系 - 纸张感 */
-    --bg-base: #F5F2EF;
-    /* 暖灰/米色底 */
-    --bg-sidebar: #EBE8E4;
-    /* 稍深一点的侧边栏 */
+    /* 背景体系 - 更柔和的纸张感 */
+    --bg-base: #FAF9F7;
+    --bg-sidebar: #F5F3F0;
     --bg-surface: #FFFFFF;
-    /* 纯白卡片 */
 
     /* 交互元素 */
-    --bg-element: #EBE8E4;
-    /* 输入框/按钮背景 */
-    --bg-hover: #E0DCD8;
+    --bg-element: #F0EEEB;
+    --bg-hover: #E8E6E3;
+    --bg-button: #F5F3F0;
 
-    /* 文本颜色 */
-    --text-primary: #383530;
-    /* 暖黑/深褐 */
-    --text-secondary: #858079;
-    /* 暖灰 */
-    --text-tertiary: #B0ACA6;
+    /* 文本颜色 - 更好的对比度 */
+    --text-primary: #1A1918;
+    --text-secondary: #6B6966;
+    --text-tertiary: #9C9A97;
 
-    /* 边框 */
-    --border-color: #E6E1DC;
-    /* 极淡的暖灰边框 */
-    --border-light: #F0F0F0;
+    /* 边框 - 更细腻 */
+    --border-color: #E8E6E3;
+    --border-light: #F0EEEB;
 
-    /* 圆角与阴影 */
+    /* 圆角 */
     --radius: 0.75rem;
-    /* 12px */
 
     /* 语义映射 */
     --color-background: var(--bg-base);
@@ -69,43 +88,44 @@
     --color-border: var(--border-color);
   }
 
-  /* .dark 类 - 暖炭黑 (Warm Charcoal) */
+  /* .dark 类 - Cursor Style Dark (Updated) */
   .dark {
-    /* 核心色调 */
-    --primary: #C15F3C;
-    /* 保持一致，或稍微提亮 */
-    --primary-light: #D57A5A;
-    --primary-dark: #A04A2B;
+    /* 核心色调 - 稍亮的橙色在深色下更醒目 (默认，会被 JS 覆盖) */
+    --primary: #E8957A;
+    --primary-light: #F0A890;
+    --primary-dark: #DA7756;
 
-    /* 背景体系 - 实体炭黑 */
-    --bg-base: #1C1B1A;
-    /* 深暖炭色 */
-    --bg-sidebar: #22201F;
-    /* 稍亮一点的侧边栏 */
-    --bg-surface: #282625;
-    /* 卡片/浮层 */
+    /* 背景体系 - Based on user provided colors */
+    /* black-700: hsl(0 0% 0%) */
+    /* black-400: hsl(0 0% 25%) */
+    
+    --bg-base: hsl(0 0% 0%);
+    --bg-sidebar: hsl(0 0% 0%); /* Sidebar blends with base */
+    --bg-surface: hsl(0 0% 25%);
 
     /* 交互元素 */
-    --bg-element: #33302E;
-    --bg-hover: #3D3A38;
+    --bg-element: hsl(0 0% 30%);
+    --bg-hover: hsl(0 0% 35%);
+    --bg-button: hsl(0 0% 25%);
 
     /* 文本颜色 */
-    --text-primary: #E6E1D8;
-    /* 暖白/骨色 */
-    --text-secondary: #9E9891;
-    /* 暖灰 */
-    --text-tertiary: #6B6661;
+    /* black-50: hsl(0 0% 95%) */
+    /* black-100: hsl(0 0% 62%) */
+    
+    --text-primary: hsl(0 0% 95%);
+    --text-secondary: hsl(0 0% 62%);
+    --text-tertiary: hsl(0 0% 45%);
 
-    /* 边框 - 极低透明度 */
-    --border-color: rgba(255, 255, 255, 0.06);
-    --border-light: rgba(255, 255, 255, 0.03);
+    /* 边框 - Match surface for seamless look or slightly lighter */
+    --border-color: hsl(0 0% 25%);
+    --border-light: hsl(0 0% 20%);
 
     /* 语义映射更新 */
     --color-background: var(--bg-base);
     --color-surface: var(--bg-surface);
     --color-primary: var(--primary);
     --color-primary-hover: var(--primary-dark);
-    --color-primary-foreground: #FFFFFF;
+    --color-primary-foreground: #000000;
     --color-secondary: var(--text-secondary);
     --color-secondary-foreground: var(--text-primary);
     --color-muted: var(--text-tertiary);
@@ -120,9 +140,11 @@
   }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   /* 标题字体 - 衬线体 (Claude Style) */
@@ -132,10 +154,15 @@
   h4,
   .font-serif,
   .timeline-header {
-    font-family: 'Noto Serif SC', serif;
+    font-family: 'Noto Serif SC', Georgia, serif;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
   }
+
+  /* 更精细的字重控制 */
+  h1 { font-weight: 700; }
+  h2 { font-weight: 600; }
+  h3, h4 { font-weight: 500; }
 }
 
 @layer utilities {
@@ -148,40 +175,32 @@
     /* 无边框，靠色差 */
   }
 
-  /* 侧边栏导航项 */
+  /* 侧边栏导航项 - Claude/Cursor 风格 */
   .nav-item {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.625rem 0.875rem;
-    /* 稍微增加内边距 */
+    padding: 0.5rem 0.75rem;
     border-radius: 0.5rem;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .nav-item:hover {
-    background: var(--bg-hover);
+    background: var(--bg-element);
     color: var(--text-primary);
-    transform: translateX(2px);
-    /* 细微交互 */
   }
 
   .nav-item.active {
     background: var(--bg-element);
-    /* 不再使用高亮色底，而是使用深色底 */
     color: var(--text-primary);
-    /* 使用主文本色，而非强调色，更克制 */
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    /* 极淡阴影 */
+    font-weight: 500;
   }
 
-  /* 想要更明显的激活状态，可以用这个变体 */
   .nav-item.active-accent {
-    background: var(--bg-element);
+    background: rgba(218, 119, 86, 0.1);
     color: var(--primary);
   }
 
@@ -190,58 +209,78 @@
     color: var(--text-primary);
   }
 
+  .dark .nav-item.active-accent {
+    background: rgba(232, 149, 122, 0.15);
+    color: var(--primary);
+  }
+
   /* 主内容面板 */
   .main-panel {
     background: var(--bg-base);
     /* 纯净背景，无需圆角或边框 */
   }
 
-  /* 卡片样式 - 实体悬浮 (Solid Float) */
+  /* 卡片样式 - Claude/Cursor 风格 */
   .card {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
-    /* 极淡边框以防万一 */
-    border-radius: 0.75rem;
-    /* 细腻的阴影，营造悬浮感 */
-    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.03),
+      0 4px 8px -2px rgba(0, 0, 0, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
   .card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    transform: translateY(-2px);
+    box-shadow:
+      0 4px 6px rgba(0, 0, 0, 0.04),
+      0 10px 20px -4px rgba(0, 0, 0, 0.06);
+    border-color: var(--bg-hover);
   }
 
   .dark .card {
     background: var(--bg-surface);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-    /* 稍微重点的阴影 */
+    border: 1px solid var(--border-color);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 4px 8px -2px rgba(0, 0, 0, 0.3);
   }
 
-  /* 按钮样式 */
+  .dark .card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 4px 6px rgba(0, 0, 0, 0.3),
+      0 10px 20px -4px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 按钮样式 - Claude/Cursor 风格 */
   .btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     font-size: 0.875rem;
-    font-weight: 600;
-    transition: all 0.2s ease;
+    font-weight: 500;
+    transition: all 0.15s ease;
     cursor: pointer;
+    gap: 0.5rem;
   }
 
   .btn-primary {
     background: var(--primary);
     color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 
   .btn-primary:hover {
     background: var(--primary-dark);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
   }
 
   .btn-secondary {
@@ -252,32 +291,52 @@
 
   .btn-secondary:hover {
     background: var(--bg-hover);
-    border-color: var(--text-secondary);
-    /* Hover时加深边框 */
+    border-color: var(--text-tertiary);
   }
 
-  /* 输入框样式 */
-  .input {
-    width: 100%;
-    padding: 0.625rem 1rem;
-    border: 1px solid transparent;
-    border-radius: 0.5rem;
+  .btn-secondary:active {
+    transform: scale(0.98);
+  }
+
+  /* Ghost 按钮 - Cursor 风格 */
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .btn-ghost:hover {
     background: var(--bg-element);
     color: var(--text-primary);
+  }
+
+  /* 输入框样式 - Claude/Cursor 风格 */
+  .input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--bg-surface);
+    color: var(--text-primary);
     font-size: 0.875rem;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .input::placeholder {
     color: var(--text-tertiary);
   }
 
+  .input:hover {
+    border-color: var(--text-tertiary);
+  }
+
   .input:focus {
     outline: none;
-    background: var(--bg-surface);
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(193, 95, 60, 0.1);
-    /* Primary color glow */
+    box-shadow: 0 0 0 3px rgba(218, 119, 86, 0.12);
+  }
+
+  .dark .input:focus {
+    box-shadow: 0 0 0 3px rgba(232, 149, 122, 0.15);
   }
 
   /* 移除原有 Glass 类，用实体类兜底 */
@@ -304,20 +363,7 @@
   }
 
   /* Scrollbar - 细致化 */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background-color: var(--text-tertiary);
-    border-radius: 9999px;
-    opacity: 0.5;
-  }
 
   /* 开关 (Switch) - Refined */
   .switch {

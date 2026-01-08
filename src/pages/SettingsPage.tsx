@@ -24,6 +24,50 @@ const settingsSections = [
   { id: 'performance', label: '性能', icon: 'speed' },
 ];
 
+// Helper: HSL to Hex
+const hslToHex = (h: number, s: number, l: number) => {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
+
+// Helper: Hex to Hue (approximated)
+const hexToHue = (hex: string) => {
+  let r = 0, g = 0, b = 0;
+  if (hex.length === 4) {
+    r = parseInt("0x" + hex[1] + hex[1]);
+    g = parseInt("0x" + hex[2] + hex[2]);
+    b = parseInt("0x" + hex[3] + hex[3]);
+  } else if (hex.length === 7) {
+    r = parseInt("0x" + hex[1] + hex[2]);
+    g = parseInt("0x" + hex[3] + hex[4]);
+    b = parseInt("0x" + hex[5] + hex[6]);
+  }
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const cmin = Math.min(r,g,b),
+        cmax = Math.max(r,g,b),
+        delta = cmax - cmin;
+  let h = 0;
+  
+  if (delta === 0) h = 0;
+  else if (cmax === r) h = ((g - b) / delta) % 6;
+  else if (cmax === g) h = (b - r) / delta + 2;
+  else h = (r - g) / delta + 4;
+
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return h;
+}
+
 function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [syncFolders, setSyncFolders] = useState<SyncFolder[]>([]);
@@ -36,13 +80,14 @@ function SettingsPage() {
 
   // Store actions
   const {
-    windowTransparency,
-    blurRadius,
-    customBlurEnabled,
-    setWindowTransparency,
-    setBlurRadius,
-    setCustomBlurEnabled,
+    themeColor,
+    setThemeColor,
+    theme,
+    setTheme,
   } = useSettingsStore();
+
+  // Local Hue State
+  const [hue, setHue] = useState(15); // Default Terracotta
 
   // 各区块的 ref
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -52,11 +97,27 @@ function SettingsPage() {
     void loadSyncFolders();
   }, []);
 
+  // Sync hue from themeColor when loaded
+  useEffect(() => {
+    if (themeColor) {
+        setHue(hexToHue(themeColor));
+    }
+  }, [themeColor]);
+
   // 监听滚动，更新当前活动区块
   useEffect(() => {
     const handleScroll = (e: Event) => {
       const container = e.target as HTMLElement;
       const scrollTop = container.scrollTop;
+      const clientHeight = container.clientHeight;
+      const scrollHeight = container.scrollHeight;
+
+      // 检查是否滚动到底部 (给予 5px 误差)
+      if (Math.abs(scrollHeight - clientHeight - scrollTop) <= 5) {
+        const lastSection = settingsSections[settingsSections.length - 1];
+        setActiveSection(lastSection.id);
+        return;
+      }
 
       let currentSection = 'sync';
       for (const section of settingsSections) {
@@ -93,10 +154,11 @@ function SettingsPage() {
       setSettings(data);
 
       // 同步 Store 中的外观设置
-      if (data.window) {
-        setWindowTransparency(data.window.transparency ?? 30);
-        setBlurRadius(data.window.blurRadius ?? 20);
-        setCustomBlurEnabled(data.window.customBlurEnabled ?? customBlurEnabled);
+      if (data.appearance?.themeColor) {
+        setThemeColor(data.appearance.themeColor);
+      }
+      if (data.theme) {
+          setTheme(data.theme);
       }
     } catch (err) {
       showMessage('error', `加载设置失败: ${err}`);
@@ -123,14 +185,13 @@ function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      // 构造包含窗口设置的完整设置对象
+      // 构造包含外观设置的完整设置对象
       const settingsToSave = {
         ...settings,
-        window: {
-          opacity: windowTransparency / 100,
-          transparency: windowTransparency,
-          blurRadius: blurRadius,
-          customBlurEnabled: customBlurEnabled
+        theme: theme,
+        appearance: {
+          themeColor: themeColor,
+          fontSizeScale: 1.0, // Default for now
         }
       };
       await saveSettings(settingsToSave);
@@ -148,10 +209,11 @@ function SettingsPage() {
     try {
       const defaults = await resetSettings();
       setSettings(defaults);
-      if (defaults.window) {
-        setWindowTransparency(defaults.window.transparency ?? 30);
-        setBlurRadius(defaults.window.blurRadius ?? 20);
-        setCustomBlurEnabled(defaults.window.customBlurEnabled ?? customBlurEnabled);
+      if (defaults.appearance) {
+         setThemeColor(defaults.appearance.themeColor);
+      }
+      if (defaults.theme) {
+          setTheme(defaults.theme);
       }
       showMessage('success', '设置已重置为默认值');
     } catch (err) {
@@ -159,6 +221,12 @@ function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleHueChange = (newHue: number) => {
+      setHue(newHue);
+      const hex = hslToHex(newHue, 64, 60); // Keep saturation/lightness consistent
+      setThemeColor(hex);
   };
 
   const handleAddSyncFolder = async () => {
@@ -239,8 +307,8 @@ function SettingsPage() {
 
       {/* 页面头部 */}
       <div className="p-6 pb-0">
-        <h2 className="text-4xl font-black leading-tight tracking-tight text-primary font-serif">设置</h2>
-        <p className="pt-1 text-base font-normal leading-normal text-secondary">
+        <h2 className="text-2xl font-semibold leading-tight tracking-tight text-primary">设置</h2>
+        <p className="pt-1 text-sm font-normal leading-normal text-secondary">
           管理您的应用程序设置和偏好。
         </p>
       </div>
@@ -273,14 +341,14 @@ function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full py-2 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg shadow-blue-500/20"
+              className="w-full py-2 bg-primary hover:bg-primary-dark active:scale-[0.98] text-white rounded-lg font-medium transition-all"
             >
               {saving ? '保存中...' : '保存设置'}
             </button>
             <button
               onClick={handleReset}
               disabled={saving}
-              className="w-full py-2 bg-surface hover:bg-gray-100 dark:hover:bg-white/5 text-secondary hover:text-primary rounded-lg font-medium transition-colors border border-border"
+              className="w-full py-2 bg-element hover:bg-hover text-secondary hover:text-primary rounded-lg font-medium transition-colors border border-border"
             >
               恢复默认设置
             </button>
@@ -288,7 +356,7 @@ function SettingsPage() {
         </aside>
 
         {/* 右侧内容区域 */}
-        <main id="settings-content" className="flex-1 h-full min-h-0 overflow-y-auto pr-2">
+        <main id="settings-content" className="flex-1 h-full min-h-0 overflow-y-auto pr-2 relative">
           <div className="max-w-4xl space-y-6">
             {/* Folder Sync */}
             <section
@@ -377,66 +445,100 @@ function SettingsPage() {
               </div>
             </section>
 
+            {/* Appearance Section */}
             <section
               ref={(el) => { sectionRefs.current['appearance'] = el; }}
-              className="card p-6 rounded-2xl"
+              className="card p-8 rounded-[2rem] border-outline/20"
             >
-              <h3 className="text-lg font-semibold text-primary">外观</h3>
-              <p className="text-sm text-secondary mb-4">调整窗口背景效果。</p>
-
-
-
-              <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-surface px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-primary">自定义桌面模糊</p>
-                  <p className="text-xs text-secondary">开启后使用桌面截图模糊，半径可调；关闭后使用系统材质（Windows 下半径不可精确控制）</p>
-                </div>
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    data-testid="custom-blur-toggle"
-                    type="checkbox"
-                    checked={customBlurEnabled}
-                    onChange={(e) => setCustomBlurEnabled(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="peer h-6 w-11 rounded-full bg-button after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-outline/30 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20"></div>
-                </label>
+              <div className="mb-8">
+                <h3 className="text-3xl font-serif text-primary mb-1">外观</h3>
+                <p className="text-sm text-secondary">个性化您的应用程序主题。</p>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                {/* 不透明度滑块 */}
+              <div className="space-y-8">
+                {/* Theme Mode Switcher */}
                 <div>
-                  <div className="flex items-baseline justify-between mb-2">
-                    <label className="text-sm text-secondary">背景不透明度</label>
-                    <span className="text-xs text-secondary">{windowTransparency}%</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-base font-medium text-primary">主题模式</p>
+                    <div className="flex bg-surface p-1 rounded-xl border border-border">
+                      {(['light', 'system', 'dark'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setTheme(mode)}
+                          className={clsx(
+                            'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
+                            theme === mode
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'text-secondary hover:text-primary hover:bg-hover'
+                          )}
+                        >
+                          <Icon 
+                            name={mode === 'light' ? 'light_mode' : mode === 'dark' ? 'dark_mode' : 'settings_brightness'} 
+                            className="text-lg"
+                          />
+                          <span className="capitalize">
+                            {mode === 'light' ? '浅色' : mode === 'dark' ? '深色' : '自动'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={windowTransparency}
-                    onChange={(e) => setWindowTransparency(parseInt(e.target.value))}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
-                  />
+                  <p className="text-sm text-secondary leading-relaxed">
+                     选择浅色、深色模式或跟随系统设置。深色模式经过专门优化，提供舒适的沉浸式体验。
+                  </p>
                 </div>
 
-                {/* 模糊半径滑块 */}
+                <div className="h-px bg-outline/10 w-full" />
+
+                {/* Theme Color */}
                 <div>
-                  <div className="flex items-baseline justify-between mb-2">
-                    <label className="text-sm text-secondary">模糊半径</label>
-                    <span className="text-xs text-secondary">{blurRadius}</span>
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-base font-medium text-primary">主题颜色</p>
+                    <span className="text-xs font-mono text-secondary bg-surface px-2 py-1 rounded border border-border uppercase">{themeColor}</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={blurRadius}
-                    onChange={(e) => setBlurRadius(parseInt(e.target.value))}
-                    disabled={!customBlurEnabled}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
-                  />
+                  
+                  {/* Hue Slider */}
+                  <div className="relative h-10 w-full rounded-2xl p-1 border border-outline/10 bg-surface shadow-inner mb-6">
+                      <input
+                        type="range"
+                        min="0"
+                        max="360"
+                        value={hue}
+                        onChange={(e) => handleHueChange(parseInt(e.target.value))}
+                        className="w-full h-full appearance-none bg-transparent rounded-xl cursor-pointer z-10 relative"
+                        style={{
+                            background: 'linear-gradient(to right, #f87171, #fb923c, #fbbf24, #a3e635, #4ade80, #2dd4bf, #22d3ee, #38bdf8, #60a5fa, #818cf8, #a78bfa, #c084fc, #e879f9, #f472b6, #f87171)'
+                        }}
+                      />
+                  </div>
+
+                  {/* Preview Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 rounded-xl border border-border bg-surface flex flex-col gap-2 transition-colors">
+                          <div className="h-2 w-12 rounded-full bg-primary/20"></div>
+                          <div className="h-8 w-8 rounded-lg bg-primary"></div>
+                          <div className="h-2 w-20 rounded-full bg-secondary/20"></div>
+                      </div>
+                      <div className="p-4 rounded-xl border border-border bg-surface flex items-center justify-between transition-colors">
+                          <div className="flex flex-col gap-2">
+                              <div className="h-2 w-16 rounded-full bg-primary"></div>
+                              <div className="h-2 w-10 rounded-full bg-secondary/20"></div>
+                          </div>
+                          <div className="h-6 w-6 rounded-full border-2 border-primary"></div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-primary text-white flex flex-col justify-center items-center gap-2 transition-colors">
+                          <Icon name="check_circle" className="text-2xl" />
+                          <span className="text-xs font-medium opacity-90">Active</span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex items-center gap-3 transition-colors">
+                          <Icon name="palette" className="text-primary text-xl" />
+                          <span className="text-sm font-medium text-primary">Accent</span>
+                      </div>
+                  </div>
+                  
+                  <p className="mt-6 text-xs text-secondary leading-relaxed">
+                    拖动滑块选择您喜欢的主题色。系统会自动生成协调的配色方案（固定饱和度与亮度），确保在任何颜色下都保持良好的可读性与视觉舒适度。
+                  </p>
                 </div>
               </div>
             </section>
@@ -571,7 +673,7 @@ function SettingsPage() {
                         thumbnail: { ...settings.thumbnail, cacheSizeMb: parseInt(e.target.value) || 1024 },
                       })
                     }
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary/20 accent-primary"
                   />
                 </div>
 
@@ -592,7 +694,7 @@ function SettingsPage() {
                         thumbnail: { ...settings.thumbnail, quality: parseInt(e.target.value) },
                       })
                     }
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary/20 accent-primary"
                   />
                 </div>
               </div>
@@ -622,7 +724,7 @@ function SettingsPage() {
                         performance: { ...settings.performance, scanThreads: parseInt(e.target.value) || 0 },
                       })
                     }
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary/20 accent-primary"
                   />
                 </div>
 
@@ -643,7 +745,7 @@ function SettingsPage() {
                         performance: { ...settings.performance, thumbnailThreads: parseInt(e.target.value) || 0 },
                       })
                     }
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-button accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-secondary/20 accent-primary"
                   />
                 </div>
               </div>

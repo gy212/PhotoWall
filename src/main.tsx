@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -40,6 +41,17 @@ async function logToBackend(level: 'debug' | 'info' | 'warn' | 'error', message:
   }
 }
 
+async function emitToBackend(eventName: string, payload?: unknown) {
+  try {
+    const { isTauri } = await import('@tauri-apps/api/core');
+    if (!isTauri()) return;
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit(eventName, payload);
+  } catch {
+    // ignore
+  }
+}
+
 async function boot() {
   // Don't force theme here; keep it light by default and let the app/theme hook decide.
   document.documentElement.classList.remove('dark');
@@ -65,7 +77,7 @@ async function boot() {
   root.render(
     <div style={{ padding: 16, fontFamily: 'ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial' }}>
       <div style={{ fontSize: 14, opacity: 0.85 }}>正在启动…</div>
-      <div style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>如果一直卡住，请查看 `src-tauri/logs/frontend.*.log`。</div>
+      <div style={{ fontSize: 12, opacity: 0.65, marginTop: 8 }}>如果一直卡住，请查看 `logs/frontend.*.log`。</div>
     </div>
   );
 
@@ -78,7 +90,21 @@ async function boot() {
         const { default: App } = await import('./App');
         root.render(
           <React.StrictMode>
-            <App />
+            <ErrorBoundary
+              onError={(error, info) => {
+                const details = getErrorDetails(error);
+                void logToBackend('error', 'react error boundary', {
+                  ...details,
+                  componentStack: info.componentStack,
+                });
+                void emitToBackend('photowall://frontend-fatal', {
+                  ...details,
+                  componentStack: info.componentStack,
+                });
+              }}
+            >
+              <App />
+            </ErrorBoundary>
           </React.StrictMode>
         );
         void logToBackend('info', 'frontend boot ok');
@@ -98,6 +124,7 @@ async function boot() {
   } catch (error) {
     renderFatal(error);
     void logToBackend('error', 'frontend boot failed', getErrorDetails(error));
+    void emitToBackend('photowall://frontend-fatal', getErrorDetails(error));
   }
 }
 

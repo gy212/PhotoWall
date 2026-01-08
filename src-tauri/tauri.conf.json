@@ -12,17 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "main",
-        "title": "PhotoWall",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "decorations": false,
-        "transparent": true,
-        "visible": false
-      },
-      {
         "label": "splash",
         "title": "Welcome to PhotoWall Light",
         "width": 420,
@@ -31,7 +20,20 @@
         "transparent": true,
         "resizable": false,
         "center": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
         "url": "splash.html"
+      },
+      {
+        "label": "main",
+        "title": "PhotoWall",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "decorations": false,
+        "transparent": true,
+        "visible": true
       }
     ],
     "security": {

@@ -213,7 +213,7 @@ export default function HomePage() {
   return (
     <div
       ref={scrollContainerRef}
-      className="h-full overflow-y-auto no-scrollbar p-8 space-y-10 relative"
+      className="h-full overflow-y-auto p-6 space-y-8 relative"
     >
       {/* 仪表盘区域 */}
       <HeroSection />
@@ -231,8 +231,8 @@ export default function HomePage() {
       {/* 全部照片区域 (Grid) */}
       <section className="min-h-[500px]">
         <div className="flex items-center justify-between mb-4 px-1">
-          <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
-            <Icon name="grid_view" className="text-primary text-xl" />
+          <h3 className="text-base font-medium flex items-center gap-2 text-primary">
+            <Icon name="grid_view" className="text-primary text-lg" />
             全部照片
           </h3>
           <span className="text-sm text-secondary">{totalCount} 张</span>

@@ -11,12 +11,13 @@ pub mod window_effects;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use tokio::sync::Semaphore;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 use commands::{
     // greet
@@ -270,6 +271,7 @@ pub fn run() {
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            let startup_ready = Arc::new(AtomicBool::new(false));
 
             // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件
             services::thumbnail_queue::set_app_handle(app_handle.clone());
@@ -308,6 +310,50 @@ pub fn run() {
                         }
                         _ => {}
                     }
+                });
+            }
+
+            // Splash：仅在前端确认可用后关闭，并提供超时兜底，避免“卡在加载”或“白屏”。
+            if let (Some(main_window), Some(splash_window)) = (
+                app.get_webview_window("main"),
+                app.get_webview_window("splash"),
+            ) {
+                let ready_flag = startup_ready.clone();
+                let main_for_event = main_window.clone();
+                let splash_for_event = splash_window.clone();
+                app_handle.listen("photowall://frontend-ready", move |_event| {
+                    if ready_flag.swap(true, Ordering::SeqCst) {
+                        return;
+                    }
+                    tracing::info!("frontend-ready received, closing splash");
+                    let _ = splash_for_event.close();
+                    let _ = main_for_event.show();
+                    let _ = main_for_event.set_focus();
+                });
+
+                let ready_flag = startup_ready.clone();
+                let main_for_event = main_window.clone();
+                let splash_for_event = splash_window.clone();
+                app_handle.listen("photowall://frontend-fatal", move |_event| {
+                    if ready_flag.swap(true, Ordering::SeqCst) {
+                        return;
+                    }
+                    tracing::warn!("frontend-fatal received, closing splash");
+                    let _ = splash_for_event.close();
+                    let _ = main_for_event.show();
+                    let _ = main_for_event.set_focus();
+                });
+
+                let ready_flag = startup_ready.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(12)).await;
+                    if ready_flag.swap(true, Ordering::SeqCst) {
+                        return;
+                    }
+                    tracing::warn!("frontend-ready timeout, closing splash");
+                    let _ = splash_window.close();
+                    let _ = main_window.show();
+                    let _ = main_window.set_focus();
                 });
             }
 

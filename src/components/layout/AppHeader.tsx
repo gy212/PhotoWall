@@ -36,26 +36,26 @@ export default function AppHeader() {
   }, [location.pathname]);
 
   return (
-    <header className="h-16 flex-shrink-0 flex items-center justify-between px-6 pb-2 relative z-50 select-none">
+    <header className="h-14 flex-shrink-0 flex items-center justify-between px-6 relative z-50 select-none">
       {/* 透明拖拽层 - 覆盖整个 Header 但避开按钮 */}
       <div className="absolute inset-0 z-0" data-tauri-drag-region />
 
-      {/* 左侧 Logo - z-index 提升以允许交互或悬停 */}
-      <div className="flex items-center gap-3 w-56 pointer-events-none z-10">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#C15F3C] to-[#D57A5A] rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/20">
-          <Icon name="photo_library" className="text-white text-2xl" />
+      {/* 左侧 Logo */}
+      <div className="flex items-center gap-2.5 w-48 pointer-events-none z-10">
+        <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-light rounded-xl flex items-center justify-center shadow-sm">
+          <Icon name="photo_library" className="text-white text-lg" />
         </div>
-        <span className="font-bold text-2xl tracking-tight text-primary font-serif">PhotoWall</span>
+        <span className="font-semibold text-xl tracking-tight text-primary">PhotoWall</span>
       </div>
 
-      {/* 中间导航 - 实体胶囊 */}
+      {/* 中间导航 - Claude/Cursor 风格胶囊 */}
       <nav
         ref={navRef}
-        className="flex items-center gap-1 bg-surface p-1 rounded-full border border-border shadow-sm relative z-10 pointer-events-auto"
+        className="flex items-center gap-0.5 bg-element p-1 rounded-full relative z-10 pointer-events-auto"
       >
         {/* 滑动背景块 */}
         <div
-          className="absolute top-1 bottom-1 bg-primary rounded-full shadow-md transition-all duration-300 ease-out z-0"
+          className="absolute top-1 bottom-1 bg-surface rounded-full shadow-sm border border-border transition-all duration-200 ease-out z-0"
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
@@ -73,25 +73,25 @@ export default function AppHeader() {
             }}
             className={({ isActive }) =>
               clsx(
-                'relative z-10 px-6 py-1.5 rounded-full text-sm font-medium transition-colors duration-200 flex items-center gap-2',
+                'relative z-10 px-4 py-1.5 rounded-full text-sm font-medium transition-colors duration-150 flex items-center gap-1.5',
                 isActive
-                  ? 'text-white'
-                  : 'text-secondary hover:text-primary hover:bg-hover'
+                  ? 'text-primary'
+                  : 'text-secondary hover:text-primary'
               )
             }
           >
-            <Icon name={item.icon} className="text-lg" />
+            <Icon name={item.icon} className="text-base" />
             <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      {/* 右侧工具 & 窗口控制 - z-index 提升 */}
-      <div className="flex items-center gap-4 w-48 justify-end relative z-10 pointer-events-auto">
-        <button className="text-secondary hover:text-primary transition-colors cursor-pointer">
-          <Icon name="search" className="text-[20px]" />
+      {/* 右侧工具 & 窗口控制 */}
+      <div className="flex items-center gap-3 w-48 justify-end relative z-10 pointer-events-auto">
+        <button className="p-2 text-secondary hover:text-primary hover:bg-element rounded-lg transition-all cursor-pointer">
+          <Icon name="search" className="text-lg" />
         </button>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-300 to-gray-100 border border-border"></div>
+        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary/20 to-primary/10 border border-border" />
 
         <WindowControls />
       </div>

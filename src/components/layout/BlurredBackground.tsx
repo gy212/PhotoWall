@@ -20,6 +20,7 @@ import {
   setCompositionBlurRadius,
 } from '@/services/api';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useShallow } from 'zustand/shallow';
 
 interface BlurredBackgroundProps {
   /** 是否启用 */
@@ -53,7 +54,16 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
     compositionBlurEnabled,
     setCompositionBlurSupported,
     setCompositionBlurEnabled,
-  } = useSettingsStore();
+  } = useSettingsStore(
+    useShallow((state) => ({
+      blurRadius: state.blurRadius,
+      customBlurEnabled: state.customBlurEnabled,
+      compositionBlurSupported: state.compositionBlurSupported,
+      compositionBlurEnabled: state.compositionBlurEnabled,
+      setCompositionBlurSupported: state.setCompositionBlurSupported,
+      setCompositionBlurEnabled: state.setCompositionBlurEnabled,
+    }))
+  );
 
   // 检测 Composition Blur 支持
   useEffect(() => {

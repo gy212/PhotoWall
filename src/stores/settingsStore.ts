@@ -23,17 +23,16 @@ interface SettingsState {
   /** 启动时自动扫描 */
   autoScanOnStart: boolean;
 
-  /** 窗口背景不透明度 - 保留兼容性 */
+  /** 主题色 (Hex) */
+  themeColor: string;
+  /** 主题模式 */
+  theme: 'light' | 'dark' | 'system';
+
   windowOpacity: number;
-  /** 窗口透明度 (0-100)，0=不透明，100=高度透明 */
   windowTransparency: number;
-  /** 模糊半径 (0-100) */
   blurRadius: number;
-  /** 是否启用自定义桌面模糊 */
   customBlurEnabled: boolean;
-  /** 是否支持 Composition Backdrop (Windows 11+) */
   compositionBlurSupported: boolean;
-  /** 是否启用 Composition Backdrop 模糊 */
   compositionBlurEnabled: boolean;
 
   // Actions
@@ -45,6 +44,8 @@ interface SettingsState {
   setAutoCleanupCache: (enabled: boolean) => void;
   setWorkerThreads: (threads: number) => void;
   setAutoScanOnStart: (enabled: boolean) => void;
+  setThemeColor: (color: string) => void;
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setWindowOpacity: (opacity: number) => void;
   setWindowTransparency: (transparency: number) => void;
   setBlurRadius: (radius: number) => void;
@@ -62,10 +63,12 @@ const defaultSettings = {
   autoCleanupCache: true,
   workerThreads: 4,
   autoScanOnStart: false,
-  windowOpacity: 0.3,
+  themeColor: '#DA7756', // 默认 Terracotta
+  theme: 'system' as const,
+  windowOpacity: 100,
   windowTransparency: 30,
-  blurRadius: 20,
-  customBlurEnabled: true,
+  blurRadius: 24,
+  customBlurEnabled: false,
   compositionBlurSupported: false,
   compositionBlurEnabled: false,
 };
@@ -74,41 +77,81 @@ export const useSettingsStore = create<SettingsState>()(persist(
   (set) => ({
     ...defaultSettings,
 
-    setLanguage: (language) => set({ language }),
+    setLanguage: (language) =>
+      set((state) => (state.language === language ? state : { language })),
 
     addWatchedFolder: (path) =>
-      set((state) => ({
-        watchedFolders: [...new Set([...state.watchedFolders, path])],
-      })),
+      set((state) => {
+        if (state.watchedFolders.includes(path)) return state;
+        return { watchedFolders: [...state.watchedFolders, path] };
+      }),
 
     removeWatchedFolder: (path) =>
-      set((state) => ({
-        watchedFolders: state.watchedFolders.filter((f) => f !== path),
-      })),
+      set((state) => {
+        if (!state.watchedFolders.includes(path)) return state;
+        return { watchedFolders: state.watchedFolders.filter((f) => f !== path) };
+      }),
 
-    setExcludePatterns: (excludePatterns) => set({ excludePatterns }),
-    setMaxCacheSize: (maxCacheSize) => set({ maxCacheSize }),
-    setAutoCleanupCache: (autoCleanupCache) => set({ autoCleanupCache }),
-    setWorkerThreads: (workerThreads) => set({ workerThreads }),
-    setAutoScanOnStart: (autoScanOnStart) => set({ autoScanOnStart }),
-    setWindowOpacity: (windowOpacity) => {
-      const clampedOpacity = Math.max(0, Math.min(1, windowOpacity));
-      set({
-        windowOpacity: clampedOpacity,
-        windowTransparency: Math.round(clampedOpacity * 100),
-      });
-    },
-    setWindowTransparency: (windowTransparency) => {
-      const clampedTransparency = Math.max(0, Math.min(100, windowTransparency));
-      set({
-        windowTransparency: clampedTransparency,
-        windowOpacity: clampedTransparency / 100,
-      });
-    },
-    setBlurRadius: (blurRadius) => set({ blurRadius: Math.max(0, Math.min(100, blurRadius)) }),
-    setCustomBlurEnabled: (customBlurEnabled) => set({ customBlurEnabled }),
-    setCompositionBlurSupported: (compositionBlurSupported) => set({ compositionBlurSupported }),
-    setCompositionBlurEnabled: (compositionBlurEnabled) => set({ compositionBlurEnabled }),
+    setExcludePatterns: (excludePatterns) =>
+      set((state) =>
+        state.excludePatterns === excludePatterns ? state : { excludePatterns }
+      ),
+    setMaxCacheSize: (maxCacheSize) =>
+      set((state) => (state.maxCacheSize === maxCacheSize ? state : { maxCacheSize })),
+    setAutoCleanupCache: (autoCleanupCache) =>
+      set((state) =>
+        state.autoCleanupCache === autoCleanupCache ? state : { autoCleanupCache }
+      ),
+    setWorkerThreads: (workerThreads) =>
+      set((state) => (state.workerThreads === workerThreads ? state : { workerThreads })),
+    setAutoScanOnStart: (autoScanOnStart) =>
+      set((state) =>
+        state.autoScanOnStart === autoScanOnStart ? state : { autoScanOnStart }
+      ),
+    setThemeColor: (themeColor) =>
+      set((state) => (state.themeColor === themeColor ? state : { themeColor })),
+    setTheme: (theme) => set((state) => (state.theme === theme ? state : { theme })),
+    setWindowOpacity: (windowOpacity) =>
+      set((state) => {
+        const next = Math.max(0, Math.min(100, windowOpacity));
+        return state.windowOpacity === next ? state : { windowOpacity: next };
+      }),
+    setWindowTransparency: (windowTransparency) =>
+      set((state) => {
+        const next = Math.max(0, Math.min(100, windowTransparency));
+        return state.windowTransparency === next ? state : { windowTransparency: next };
+      }),
+    setBlurRadius: (blurRadius) =>
+      set((state) => {
+        const next = Math.max(0, Math.min(100, blurRadius));
+        return state.blurRadius === next ? state : { blurRadius: next };
+      }),
+    setCustomBlurEnabled: (customBlurEnabled) =>
+      set((state) => {
+        const nextCompositionBlurEnabled = customBlurEnabled ? state.compositionBlurEnabled : false;
+        if (
+          state.customBlurEnabled === customBlurEnabled &&
+          state.compositionBlurEnabled === nextCompositionBlurEnabled
+        ) {
+          return state;
+        }
+        return {
+          customBlurEnabled,
+          compositionBlurEnabled: nextCompositionBlurEnabled,
+        };
+      }),
+    setCompositionBlurSupported: (compositionBlurSupported) =>
+      set((state) =>
+        state.compositionBlurSupported === compositionBlurSupported
+          ? state
+          : { compositionBlurSupported }
+      ),
+    setCompositionBlurEnabled: (compositionBlurEnabled) =>
+      set((state) =>
+        state.compositionBlurEnabled === compositionBlurEnabled
+          ? state
+          : { compositionBlurEnabled }
+      ),
 
     resetToDefaults: () => set(defaultSettings),
   }),
