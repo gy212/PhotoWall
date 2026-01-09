@@ -12,10 +12,11 @@ import { PhotoGrid, PhotoViewer } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
+import { BatchTagSelector } from '@/components/tag';
 import { Icon } from '@/components/common/Icon';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPhotosCursor, searchPhotosCursor, setPhotosFavorite, softDeletePhotos } from '@/services/api';
-import type { Photo, PhotoCursor, SearchFilters, SortField } from '@/types';
+import type { Photo, PhotoCursor, SortField } from '@/types';
 
 const PAGE_SIZE = 100;
 const RECENT_PHOTOS_LIMIT = 20;
@@ -25,7 +26,7 @@ export default function HomePage() {
 
   // Store State
   const sortOptions = usePhotoStore(state => state.sortOptions);
-  const searchQuery = usePhotoStore(state => state.searchQuery);
+  const searchFilters = usePhotoStore(state => state.searchFilters);
   const totalCount = usePhotoStore(state => state.totalCount);
   const setTotalCount = usePhotoStore(state => state.setTotalCount);
   const selectedIds = useSelectionStore(state => state.selectedIds);
@@ -79,9 +80,50 @@ export default function HomePage() {
     return { sortValue, photoId: photo.photoId };
   }, []);
 
+  // 检查是否有活动的搜索过滤器
+  const hasActiveFilters = useMemo(() => {
+    return !!(
+      searchFilters.query?.trim() ||
+      searchFilters.dateFrom ||
+      searchFilters.dateTo ||
+      (searchFilters.tagIds && searchFilters.tagIds.length > 0) ||
+      searchFilters.minRating ||
+      searchFilters.favoritesOnly ||
+      (searchFilters.fileExtensions && searchFilters.fileExtensions.length > 0)
+    );
+  }, [searchFilters]);
+
+  // 生成过滤器标题
+  const filterTitle = useMemo(() => {
+    if (!hasActiveFilters) return "全部照片";
+
+    const parts: string[] = [];
+    if (searchFilters.query?.trim()) {
+      parts.push(`"${searchFilters.query.trim()}"`);
+    }
+    if (searchFilters.tagIds?.length) {
+      if (searchFilters.tagIds.length === 1 && searchFilters.tagNames?.[0]) {
+        parts.push(`标签: ${searchFilters.tagNames[0]}`);
+      } else {
+        parts.push(`${searchFilters.tagIds.length}个标签`);
+      }
+    }
+    if (searchFilters.dateFrom || searchFilters.dateTo) {
+      parts.push("日期范围");
+    }
+    if (searchFilters.minRating) {
+      parts.push(`≥${searchFilters.minRating}星`);
+    }
+    if (searchFilters.favoritesOnly) {
+      parts.push("收藏");
+    }
+
+    return parts.length > 0 ? `搜索: ${parts.join(" · ")}` : "筛选结果";
+  }, [hasActiveFilters, searchFilters]);
+
   const photoFeedQueryKey = useMemo(
-    () => ['photoFeed', { q: searchQuery.trim(), field: sortOptions.field, order: sortOptions.order }] as const,
-    [searchQuery, sortOptions.field, sortOptions.order]
+    () => ['photoFeed', { filters: searchFilters, field: sortOptions.field, order: sortOptions.order }] as const,
+    [searchFilters, sortOptions.field, sortOptions.order]
   );
 
   const {
@@ -98,10 +140,8 @@ export default function HomePage() {
     queryFn: async ({ pageParam }) => {
       const cursor = pageParam ?? null;
       const includeTotal = pageParam == null;
-      const q = searchQuery.trim();
-      if (q) {
-        const filters: SearchFilters = { query: q };
-        return searchPhotosCursor(filters, PAGE_SIZE, cursor, sortOptions, includeTotal);
+      if (hasActiveFilters) {
+        return searchPhotosCursor(searchFilters, PAGE_SIZE, cursor, sortOptions, includeTotal);
       }
       return getPhotosCursor(PAGE_SIZE, cursor, sortOptions, includeTotal);
     },
@@ -167,6 +207,7 @@ export default function HomePage() {
   // --- Selection Actions ---
   const queryClient = useQueryClient();
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [showTagSelector, setShowTagSelector] = useState(false);
 
   // 批量移动到回收站
   const handleMoveToTrash = async () => {
@@ -210,6 +251,13 @@ export default function HomePage() {
     }
   };
 
+  // 批量标签操作完成
+  const handleTagComplete = () => {
+    setShowTagSelector(false);
+    queryClient.invalidateQueries({ queryKey: ['photoFeed'] });
+    queryClient.invalidateQueries({ queryKey: ['recentPhotos'] });
+  };
+
   return (
     <div
       ref={scrollContainerRef}
@@ -232,8 +280,8 @@ export default function HomePage() {
       <section className="min-h-[500px]">
         <div className="flex items-center justify-between mb-4 px-1">
           <h3 className="text-base font-medium flex items-center gap-2 text-primary">
-            <Icon name="grid_view" className="text-primary text-lg" />
-            全部照片
+            <Icon name={hasActiveFilters ? "filter_list" : "grid_view"} className="text-primary text-lg" />
+            {filterTitle}
           </h3>
           <span className="text-sm text-secondary">{totalCount} 张</span>
         </div>
@@ -271,6 +319,13 @@ export default function HomePage() {
           <div className="pointer-events-auto">
             <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
               <SelectionAction
+                icon="label"
+                label="标签"
+                onClick={() => setShowTagSelector(true)}
+                disabled={isActionLoading}
+              />
+              <SelectionDivider />
+              <SelectionAction
                 icon="favorite"
                 label="收藏"
                 onClick={handleToggleFavorite}
@@ -290,6 +345,15 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* 批量标签选择器 */}
+      {showTagSelector && selectedIds.size > 0 && (
+        <BatchTagSelector
+          selectedPhotoIds={Array.from(selectedIds)}
+          onComplete={handleTagComplete}
+          onClose={() => setShowTagSelector(false)}
+        />
+      )}
 
       {viewerPhoto && (
         <PhotoViewer

@@ -96,10 +96,10 @@ const TimelineView = memo(function TimelineView({
           <div className="sticky top-0 z-20 mb-4 px-1 py-3 bg-surface/90 backdrop-blur-xl border-b border-border/40 transition-all duration-200">
             <div className="flex items-baseline justify-between">
               <div className="flex items-baseline gap-3">
-                <h3 className="text-2xl font-bold tracking-tight text-on-surface">
+                <h3 className="text-2xl font-bold tracking-tight text-primary">
                   {group.displayDate}
                 </h3>
-                <span className="text-sm font-medium text-zinc-400">
+                <span className="text-sm font-medium text-secondary">
                   {group.photos.length} 张
                 </span>
               </div>
@@ -169,21 +169,23 @@ const TimelineView = memo(function TimelineView({
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <svg
-            className="mx-auto h-16 w-16 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">暂无照片</h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">添加文件夹开始管理您的照片</p>
+          <div className="w-20 h-20 rounded-2xl bg-element flex items-center justify-center mx-auto mb-6">
+            <svg
+              className="h-10 w-10 text-tertiary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-primary font-serif">暂无照片</h3>
+          <p className="mt-2 text-sm text-secondary">添加文件夹开始管理您的照片</p>
         </div>
       </div>
     );

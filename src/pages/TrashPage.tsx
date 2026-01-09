@@ -349,12 +349,12 @@ function TrashPage() {
           </div>
 
           {/* 空状态内容 */}
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-secondary">
-            <div className="w-32 h-32 rounded-2xl bg-background border border-border flex items-center justify-center mb-8">
-              <Icon name="delete_sweep" className="text-6xl text-secondary/30" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-32 h-32 rounded-3xl bg-element flex items-center justify-center mb-8 shadow-inner">
+              <Icon name="delete_sweep" className="text-6xl text-tertiary/50" />
             </div>
 
-            <h2 className="text-3xl font-bold text-primary mb-3 font-serif">
+            <h2 className="text-3xl font-bold text-primary mb-3 font-serif tracking-tight">
               回收站为空
             </h2>
             <p className="text-secondary text-base mb-8 max-w-md">
@@ -363,7 +363,7 @@ function TrashPage() {
 
             <button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 px-6 py-3 text-base bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors shadow-md"
+              className="flex items-center gap-2 px-6 py-3 text-base bg-primary hover:bg-primary-dark text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
             >
               <Icon name="photo_library" className="text-xl" />
               <span>浏览照片</span>

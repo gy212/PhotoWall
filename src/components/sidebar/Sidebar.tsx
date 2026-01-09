@@ -166,8 +166,8 @@ function Sidebar() {
         className={clsx(
           "group flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-all duration-200 ease-out outline-none select-none",
           isActive
-            ? "bg-white shadow-sm ring-1 ring-black/5 text-primary dark:bg-primary/15 dark:text-primary dark:ring-0"
-            : "text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900 dark:text-[#9da0a5] dark:hover:bg-[#393b40] dark:hover:text-[#dfe1e5]"
+            ? "bg-surface shadow-sm ring-1 ring-black/5 text-primary dark:bg-primary/10 dark:text-primary dark:ring-0"
+            : "text-secondary hover:bg-element hover:text-primary dark:text-secondary dark:hover:bg-element dark:hover:text-primary"
         )}
       >
         <div className="flex items-center gap-3">
@@ -176,7 +176,7 @@ function Sidebar() {
             active={isActive} 
             className={clsx(
               "w-[18px] h-[18px] transition-transform duration-200", // 稍微调小一点图标，显得更精致
-              isActive ? "text-primary dark:text-[#3574f0]" : "text-zinc-400 group-hover:text-zinc-600 dark:text-[#6f737a] dark:group-hover:text-[#dfe1e5]"
+              isActive ? "text-primary" : "text-tertiary group-hover:text-secondary dark:text-tertiary dark:group-hover:text-secondary"
             )}
           />
           <span>{item.label}</span>
@@ -186,7 +186,7 @@ function Sidebar() {
         {displayCount !== undefined && displayCount > 0 && (
           <span className={clsx(
             "text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-             isActive ? "text-primary bg-primary/10 dark:text-[#3574f0] dark:bg-[#3574f0]/20" : "text-zinc-400 bg-zinc-100 dark:bg-[#393b40] dark:text-[#6f737a] group-hover:bg-white/50 dark:group-hover:bg-[#45474d]"
+             isActive ? "text-primary bg-primary/10" : "text-tertiary bg-element dark:bg-element dark:text-tertiary group-hover:bg-surface dark:group-hover:bg-surface"
           )}>
             {displayCount > 999 ? '999+' : displayCount}
           </span>
@@ -203,13 +203,13 @@ function Sidebar() {
         {/* 导航组 */}
         <nav className="flex flex-col gap-0.5">
           {/* Library 组 */}
-          <div className="px-3 mb-1.5 mt-1 text-[11px] font-bold text-zinc-400/80 dark:text-[#6f737a] uppercase tracking-widest">媒体库</div>
+          <div className="px-3 mb-1.5 mt-1 text-[11px] font-bold text-secondary uppercase tracking-widest">媒体库</div>
           {libraryItems.map(renderNavItem)}
 
           <div className="h-3"></div>
 
           {/* Secondary 组 */}
-          <div className="px-3 mb-1.5 text-[11px] font-bold text-zinc-400/80 dark:text-[#6f737a] uppercase tracking-widest">文件管理</div>
+          <div className="px-3 mb-1.5 text-[11px] font-bold text-secondary uppercase tracking-widest">文件管理</div>
           {secondaryItems.map(renderNavItem)}
         </nav>
       </div>
@@ -221,8 +221,8 @@ function Sidebar() {
           className={clsx(
             "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-all duration-200 ease-out outline-none select-none",
             activeItem === 'settings'
-              ? "bg-white shadow-sm ring-1 ring-black/5 text-primary dark:bg-primary/15 dark:text-primary dark:ring-0"
-              : "text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-[#9da0a5] dark:hover:bg-[#393b40] dark:hover:text-[#dfe1e5]"
+              ? "bg-surface shadow-sm ring-1 ring-black/5 text-primary dark:bg-primary/10 dark:text-primary dark:ring-0"
+              : "text-secondary hover:bg-element hover:text-primary dark:text-secondary dark:hover:bg-element dark:hover:text-primary"
           )}
         >
           <Icon 
@@ -230,7 +230,7 @@ function Sidebar() {
             active={activeItem === 'settings'}
             className={clsx(
               "w-[18px] h-[18px] transition-transform duration-200",
-              activeItem === 'settings' ? "text-primary dark:text-[#3574f0]" : "text-zinc-400 group-hover:text-zinc-600 dark:text-[#6f737a] dark:group-hover:text-[#dfe1e5] group-hover:rotate-45"
+              activeItem === 'settings' ? "text-primary" : "text-tertiary group-hover:text-secondary dark:text-tertiary dark:group-hover:text-secondary group-hover:rotate-45"
             )} 
           />
           <span>设置</span>

@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import type { Photo, SortOptions, ViewMode, SortField, SortOrder } from '../types';
+import type { Photo, SortOptions, ViewMode, SortField, SortOrder, SearchFilters } from '../types';
 
 interface PhotoState {
   /** 照片列表 */
@@ -22,6 +22,8 @@ interface PhotoState {
   thumbnailSize: number;
   /** 当前搜索关键词（为空表示显示全部） */
   searchQuery: string;
+  /** 搜索过滤器 */
+  searchFilters: SearchFilters;
 
   // Actions
   setPhotos: (photos: Photo[]) => void;
@@ -35,6 +37,8 @@ interface PhotoState {
   setViewMode: (mode: ViewMode) => void;
   setThumbnailSize: (size: number) => void;
   setSearchQuery: (query: string) => void;
+  setSearchFilters: (filters: SearchFilters) => void;
+  clearSearchFilters: () => void;
   clearPhotos: () => void;
 }
 
@@ -47,6 +51,7 @@ export const usePhotoStore = create<PhotoState>((set) => ({
   viewMode: 'timeline',
   thumbnailSize: 200,
   searchQuery: '',
+  searchFilters: {},
 
   setPhotos: (photos) => set({ photos }),
   addPhotos: (photos) => set((state) => ({ photos: [...state.photos, ...photos] })),
@@ -65,5 +70,7 @@ export const usePhotoStore = create<PhotoState>((set) => ({
   setViewMode: (viewMode) => set({ viewMode }),
   setThumbnailSize: (thumbnailSize) => set({ thumbnailSize }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setSearchFilters: (searchFilters) => set({ searchFilters }),
+  clearSearchFilters: () => set({ searchFilters: {}, searchQuery: '' }),
   clearPhotos: () => set({ photos: [], error: null }),
 }));

@@ -188,11 +188,11 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   return (
     <div
       className={clsx(
-        'group relative cursor-pointer overflow-hidden rounded-xl bg-white dark:bg-zinc-900 box-border',
-        'border border-zinc-200 dark:border-zinc-800', // 清晰的边框
+        'group relative cursor-pointer overflow-hidden rounded-xl bg-surface box-border',
+        'border border-border', // 清晰的边框
         'transition-all duration-200 ease-out', // 快速响应
-        !selected && 'hover:border-zinc-400 dark:hover:border-zinc-500 hover:shadow-sm', // 悬停加深边框
-        selected && 'ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2 ring-offset-white dark:ring-offset-black border-transparent' // 选中态：黑色强边框
+        !selected && 'hover:border-primary/50 hover:shadow-sm', // 悬停加深边框
+        selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-transparent' // 选中态：品牌色强边框
       )}
       style={{ width: '100%', height: '100%' }}
       onClick={handleClick}
@@ -237,21 +237,21 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         />
       )}
       {hasError && (
-        <div className="flex h-full w-full flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900 text-zinc-300">
+        <div className="flex h-full w-full flex-col items-center justify-center bg-element text-tertiary">
           <Icon name="broken_image" className="text-3xl mb-1 opacity-50" />
           <span className="text-[10px] font-medium opacity-70">无法加载</span>
         </div>
       )}
 
       {isLoading && (
-        <div className="absolute inset-0 animate-pulse bg-zinc-100 dark:bg-zinc-800" />
+        <div className="absolute inset-0 animate-pulse bg-element" />
       )}
 
       {/* 选中遮罩层 - 仅在选中时显示轻微遮罩 */}
       <div
         className={clsx(
           'absolute inset-0 transition-opacity duration-200 pointer-events-none',
-          selected ? 'bg-black/10 dark:bg-white/10' : 'bg-transparent'
+          selected ? 'bg-primary/5' : 'bg-transparent'
         )}
       />
 
@@ -269,8 +269,8 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           className={clsx(
             'flex h-5 w-5 items-center justify-center rounded-full transition-all shadow-sm',
             selected
-              ? 'bg-zinc-900 text-white shadow-md dark:bg-zinc-100 dark:text-zinc-900'
-              : 'bg-white/90 border border-zinc-200 hover:border-zinc-400 text-transparent hover:text-zinc-300'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-surface/90 border border-border hover:border-primary text-transparent hover:text-primary/30'
           )}
         >
           {selected ? (

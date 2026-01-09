@@ -600,6 +600,20 @@ impl Database {
             where_clauses.push("gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL".to_string());
         }
 
+        // 文件扩展名过滤（使用 format 字段）
+        if let Some(ref extensions) = filters.file_extensions {
+            if !extensions.is_empty() {
+                let placeholders: Vec<String> = extensions.iter().map(|_| "?".to_string()).collect();
+                where_clauses.push(format!(
+                    "LOWER(format) IN ({})",
+                    placeholders.join(", ")
+                ));
+                for ext in extensions {
+                    params_vec.push(Box::new(ext.to_lowercase()));
+                }
+            }
+        }
+
         // 标签过滤
         if let Some(ref tag_ids) = filters.tag_ids {
             if !tag_ids.is_empty() {
@@ -733,6 +747,20 @@ impl Database {
             base_where_clauses.push(
                 "gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL".to_string(),
             );
+        }
+
+        // 文件扩展名过滤（使用 format 字段）
+        if let Some(ref extensions) = filters.file_extensions {
+            if !extensions.is_empty() {
+                let placeholders: Vec<String> = extensions.iter().map(|_| "?".to_string()).collect();
+                base_where_clauses.push(format!(
+                    "LOWER(format) IN ({})",
+                    placeholders.join(", ")
+                ));
+                for ext in extensions {
+                    base_params_vec.push(Box::new(ext.to_lowercase()));
+                }
+            }
         }
 
         // 标签过滤

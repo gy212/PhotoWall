@@ -6,6 +6,7 @@ import { getAssetUrl, setPhotoRating, setPhotoFavorite, getRawPreview, isRawFile
 import { useThumbnail } from '@/hooks/useThumbnail';
 import type { Photo } from '@/types';
 import { Icon } from '@/components/common/Icon';
+import { TagSelector } from '@/components/tag';
 
 interface PhotoViewerProps {
   /** 当前照片 */
@@ -318,7 +319,7 @@ const PhotoViewer = memo(function PhotoViewer({
           {/* 缩放控制 */}
           <div className="flex items-center">
             <button
-              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-element transition-all"
               onClick={() => setScale(s => Math.max(s - 0.25, 0.5))}
               title="缩小"
             >
@@ -328,7 +329,7 @@ const PhotoViewer = memo(function PhotoViewer({
               {Math.round(scale * 100)}%
             </span>
             <button
-              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-element transition-all"
               onClick={() => setScale(s => Math.min(s + 0.25, 3))}
               title="放大"
             >
@@ -341,7 +342,7 @@ const PhotoViewer = memo(function PhotoViewer({
           {/* 常用操作 */}
           <div className="flex items-center gap-1">
             <button
-              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-black/5 transition-all"
+              className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-element transition-all"
               onClick={() => { setScale(1); setPosition({ x: 0, y: 0 }); }}
               title="重置视图"
             >
@@ -351,7 +352,7 @@ const PhotoViewer = memo(function PhotoViewer({
             <button
               className={clsx(
                 'p-2 rounded-xl transition-all',
-                isPlaying ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-black/5'
+                isPlaying ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-element'
               )}
               onClick={toggleSlideshow}
               disabled={!hasNext}
@@ -363,7 +364,7 @@ const PhotoViewer = memo(function PhotoViewer({
             <button
               className={clsx(
                 'p-2 rounded-xl transition-all',
-                localPhoto.isFavorite ? 'text-red-500 bg-red-50' : 'text-secondary hover:text-primary hover:bg-black/5'
+                localPhoto.isFavorite ? 'text-red-500 bg-red-500/10' : 'text-secondary hover:text-primary hover:bg-element'
               )}
               onClick={toggleFavorite}
               title="收藏"
@@ -378,7 +379,7 @@ const PhotoViewer = memo(function PhotoViewer({
             <button
               className={clsx(
                 'p-2 rounded-xl transition-all',
-                showInfo ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-black/5'
+                showInfo ? 'text-primary bg-primary/10' : 'text-secondary hover:text-primary hover:bg-element'
               )}
               onClick={() => setShowInfo(!showInfo)}
               title="信息"
@@ -391,7 +392,7 @@ const PhotoViewer = memo(function PhotoViewer({
 
       {/* 关闭按钮 - 独立左上角 - 退出图标 */}
       <button
-        className="absolute top-4 left-4 z-20 p-3 rounded-full bg-surface/90 backdrop-blur shadow-lg border border-white/20 ring-1 ring-black/5 text-secondary hover:text-primary hover:bg-white hover:scale-105 transition-all"
+        className="absolute top-4 left-4 z-20 p-3 rounded-full bg-surface/90 backdrop-blur shadow-lg border border-white/20 ring-1 ring-black/5 text-secondary hover:text-primary hover:bg-element hover:scale-105 transition-all"
         onClick={onClose}
         title="返回 (Esc)"
       >
@@ -532,6 +533,12 @@ const PhotoViewer = memo(function PhotoViewer({
           </div>
 
           <div className="space-y-6 text-sm">
+            {/* 标签 */}
+            <section>
+              <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">标签</h4>
+              <TagSelector photoId={localPhoto.photoId} />
+            </section>
+
             {/* 基本信息 */}
             <section>
               <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">基本信息</h4>

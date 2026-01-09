@@ -89,10 +89,9 @@ export interface Album {
 }
 
 /**
- * 带照片数量的标签
+ * 带照片数量的标签（后端使用 flatten，字段展平）
  */
-export interface TagWithCount {
-  tag: Tag;
+export interface TagWithCount extends Tag {
   photoCount: number;
 }
 
@@ -154,6 +153,8 @@ export interface SearchFilters {
   dateTo?: string;
   /** 标签ID列表 */
   tagIds?: number[];
+  /** 标签名称列表（用于显示） */
+  tagNames?: string[];
   /** 相册ID */
   albumId?: number;
   /** 相机型号 */
@@ -162,6 +163,8 @@ export interface SearchFilters {
   minRating?: number;
   /** 仅收藏 */
   favoritesOnly?: boolean;
+  /** 文件扩展名列表（用于RAW格式筛选） */
+  fileExtensions?: string[];
 }
 
 /**

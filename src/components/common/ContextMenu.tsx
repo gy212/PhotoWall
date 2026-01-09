@@ -104,22 +104,23 @@ function ContextMenu({ visible, x, y, items, onClose }: ContextMenuProps) {
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[180px] py-1.5 bg-white rounded-xl shadow-lg border border-gray-100 animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 min-w-[180px] py-1.5 bg-surface rounded-xl shadow-lg border border-border animate-in fade-in zoom-in-95 duration-100"
       style={{ left: position.x, top: position.y }}
     >
       {items.map((item, index) => (
         <div key={item.id}>
           {item.divider && index > 0 && (
-            <div className="h-px bg-gray-100 my-1.5 mx-2" />
+            <div className="h-px bg-border my-1.5 mx-2" />
           )}
           <button
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors
-              ${item.disabled 
-                ? 'text-gray-300 cursor-not-allowed' 
+            className={clsx(
+              "w-full px-3 py-2 text-left text-sm flex items-center gap-3 transition-colors",
+              item.disabled 
+                ? "text-tertiary cursor-not-allowed" 
                 : item.danger 
-                  ? 'text-red-600 hover:bg-red-50' 
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
+                  ? "text-red-500 hover:bg-red-500/10" 
+                  : "text-secondary hover:bg-element hover:text-primary"
+            )}
             disabled={item.disabled}
             onClick={() => {
               if (!item.disabled && item.onClick) {
@@ -142,4 +143,5 @@ function ContextMenu({ visible, x, y, items, onClose }: ContextMenuProps) {
   );
 }
 
+import clsx from 'clsx';
 export default ContextMenu;

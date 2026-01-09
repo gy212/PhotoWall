@@ -2,6 +2,7 @@
 import { getAssetUrl } from '@/services/api';
 import type { AlbumWithCount } from '@/types';
 import type { MouseEvent } from 'react';
+import { Icon } from '@/components/common/Icon';
 
 interface AlbumGridProps {
   albums: AlbumWithCount[];
@@ -13,18 +14,23 @@ interface AlbumGridProps {
 export function AlbumGrid({ albums, onAlbumClick, onAlbumContextMenu, loading }: AlbumGridProps) {
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-muted-foreground">加载中...</div>
+      <div className="flex h-64 items-center justify-center text-tertiary">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-element border-t-primary" />
+          <span className="text-sm">加载中...</span>
+        </div>
+      </div>
     );
   }
 
   if (albums.length === 0) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-center text-muted-foreground">
-        <svg className="mb-4 h-16 w-16 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-        <p className="font-semibold">暂无相册</p>
-        <p className="mt-1 text-sm">点击右下角按钮创建一个吧</p>
+      <div className="flex h-64 flex-col items-center justify-center text-center text-tertiary">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-element shadow-inner">
+          <Icon name="photo_library" className="text-3xl opacity-50" />
+        </div>
+        <p className="font-semibold text-secondary">暂无相册</p>
+        <p className="mt-1 text-sm">点击右上角按钮创建一个吧</p>
       </div>
     );
   }
@@ -40,33 +46,31 @@ export function AlbumGrid({ albums, onAlbumClick, onAlbumContextMenu, loading }:
             onAlbumContextMenu?.({ album, photoCount }, e);
           }}
           className={clsx(
-            'group cursor-pointer overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-all duration-300',
-            'hover:-translate-y-1 hover:border-primary hover:shadow-lg'
+            'group cursor-pointer overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-300',
+            'hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg'
           )}
         >
-          <div className="relative aspect-square bg-gradient-to-br from-muted/20 to-muted/10">
+          <div className="relative aspect-square bg-element">
             {album.coverPhotoId ? (
               <img
-                src={getAssetUrl(`path/to/cover/${album.coverPhotoId}`)}
+                src={getAssetUrl(`path/to/cover/${album.coverPhotoId}`)} // Note: logic for cover path might need adjustment if real
                 alt={album.albumName}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <svg className="h-16 w-16 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
+                <Icon name="photo_library" className="text-4xl text-tertiary/40" />
               </div>
             )}
-            <div className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            <div className="absolute right-2 top-2 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-md border border-white/10">
               {photoCount}
             </div>
           </div>
 
           <div className="p-3">
-            <h3 className="truncate font-semibold text-primary group-hover:text-primary/80">{album.albumName}</h3>
+            <h3 className="truncate font-semibold text-primary group-hover:text-primary-dark transition-colors">{album.albumName}</h3>
             {album.description && (
-              <p className="mt-1 truncate text-sm text-muted-foreground">{album.description}</p>
+              <p className="mt-1 truncate text-xs text-tertiary">{album.description}</p>
             )}
           </div>
         </div>

@@ -10,7 +10,8 @@ import { PhotoGrid, PhotoViewer } from '@/components/photo';
 import { useFolderStore } from '@/stores/folderStore';
 import { useSelectionStore } from '@/stores/selectionStore';
 import { usePhotoStore } from '@/stores/photoStore';
-import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
+import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
+import { BatchTagSelector } from '@/components/tag';
 import { Icon } from '@/components/common/Icon';
 import {
   getFolderTree,
@@ -72,6 +73,7 @@ function FoldersPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [favoriting, setFavoriting] = useState(false);
   const [loadingFolderPath, setLoadingFolderPath] = useState<string | null>(null);
+  const [showTagSelector, setShowTagSelector] = useState(false);
 
   // 初始加载
   useEffect(() => {
@@ -357,6 +359,14 @@ function FoldersPage() {
     }
   }, [selectedIds]);
 
+  // 批量标签操作完成
+  const handleTagComplete = useCallback(() => {
+    setShowTagSelector(false);
+    if (selectedFolderPath) {
+      loadPhotos(selectedFolderPath, 1, true);
+    }
+  }, [selectedFolderPath, loadPhotos]);
+
   // 获取当前选中文件夹的名称
   const selectedFolderName = useMemo(() => {
     if (!selectedFolderPath) return null;
@@ -564,12 +574,20 @@ function FoldersPage() {
             {selectedIds.size > 0 && (
               <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
                 <SelectionAction
+                  icon="label"
+                  label="标签"
+                  onClick={() => setShowTagSelector(true)}
+                  disabled={favoriting}
+                />
+                <SelectionDivider />
+                <SelectionAction
                   icon="favorite"
                   label="收藏"
                   onClick={() => handleToggleFavorite(true)}
                   disabled={favoriting}
                   title="添加到收藏"
                 />
+                <SelectionDivider />
                 <SelectionAction
                   icon="delete"
                   label="删除"
@@ -577,6 +595,15 @@ function FoldersPage() {
                   title="删除"
                 />
               </SelectionToolbar>
+            )}
+
+            {/* 批量标签选择器 */}
+            {showTagSelector && selectedIds.size > 0 && (
+              <BatchTagSelector
+                selectedPhotoIds={Array.from(selectedIds)}
+                onComplete={handleTagComplete}
+                onClose={() => setShowTagSelector(false)}
+              />
             )}
 
             <PhotoGrid
@@ -592,10 +619,10 @@ function FoldersPage() {
             />
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-background/50">
+          <div className="flex-1 flex items-center justify-center bg-background/30">
             <div className="text-center">
-              <div className="w-24 h-24 rounded-2xl bg-surface border border-border flex items-center justify-center mx-auto mb-6 shadow-sm">
-                <Icon name="folder_open" className="text-5xl text-secondary/40" />
+              <div className="w-24 h-24 rounded-3xl bg-element flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <Icon name="folder_open" className="text-5xl text-tertiary/50" />
               </div>
               <p className="text-lg text-secondary font-medium">从左侧面板选择一个文件夹</p>
             </div>

@@ -62,7 +62,7 @@ export default function ContentShelf({
                     </h3>
                 </div>
                 <div className="flex items-center justify-center w-full py-12">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-500" />
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-element border-t-primary" />
                     <span className="ml-3 text-secondary text-sm">加载中...</span>
                 </div>
             </section>
@@ -81,11 +81,11 @@ export default function ContentShelf({
                 </div>
                 <div className="flex items-center justify-center w-full py-12">
                     <div className="flex flex-col items-center text-center">
-                        <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center mb-4">
-                            <Icon name="add_photo_alternate" className="text-3xl text-secondary" size={32} />
+                        <div className="w-16 h-16 rounded-full bg-element border border-border flex items-center justify-center mb-4">
+                            <Icon name="add_photo_alternate" className="text-3xl text-tertiary" size={32} />
                         </div>
                         <p className="text-secondary text-sm">暂无照片</p>
-                        <p className="text-secondary/70 text-xs mt-1">扫描文件夹开始使用</p>
+                        <p className="text-tertiary text-xs mt-1">扫描文件夹开始使用</p>
                     </div>
                 </div>
             </section>

@@ -10,7 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { PhotoGrid, PhotoViewer, TimelineView } from '@/components/photo';
 import { usePhotoStore } from '@/stores/photoStore';
 import { useSelectionStore } from '@/stores/selectionStore';
-import { SelectionToolbar, SelectionAction } from '@/components/common/SelectionToolbar';
+import { SelectionToolbar, SelectionAction, SelectionDivider } from '@/components/common/SelectionToolbar';
+import { BatchTagSelector } from '@/components/tag';
 import { Icon } from '@/components/common/Icon';
 import {
   getFavoritePhotos,
@@ -53,6 +54,7 @@ function FavoritesPage() {
 
   // 取消收藏状态
   const [unfavoriting, setUnfavoriting] = useState(false);
+  const [showTagSelector, setShowTagSelector] = useState(false);
 
   // 初始加载
   useEffect(() => {
@@ -221,6 +223,12 @@ function FavoritesPage() {
     }
   }, [selectedIds, clearSelection]);
 
+  // 批量标签操作完成
+  const handleTagComplete = useCallback(() => {
+    setShowTagSelector(false);
+    loadFavorites(1, true);
+  }, [loadFavorites]);
+
   // 键盘快捷键
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -270,12 +278,12 @@ function FavoritesPage() {
           </div>
 
           {/* 空状态内容 */}
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-secondary">
-            <div className="w-32 h-32 rounded-2xl bg-red-50 flex items-center justify-center mb-8 border border-red-100">
-              <Icon name="favorite" className="text-6xl text-red-300" />
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <div className="w-32 h-32 rounded-3xl bg-red-500/10 flex items-center justify-center mb-8 shadow-inner">
+              <Icon name="favorite" className="text-6xl text-red-500" filled />
             </div>
 
-            <h2 className="text-3xl font-bold text-primary mb-3 font-serif">
+            <h2 className="text-3xl font-bold text-primary mb-3 font-serif tracking-tight">
               暂无收藏
             </h2>
             <p className="text-secondary text-base mb-8 max-w-md">
@@ -284,7 +292,7 @@ function FavoritesPage() {
 
             <button
               onClick={() => navigate('/')}
-              className="px-6 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-all shadow-md flex items-center gap-2"
+              className="flex items-center gap-2 px-6 py-3 text-base bg-primary hover:bg-primary-dark text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 active:translate-y-0"
             >
               <Icon name="photo_library" className="text-xl" />
               <span>浏览照片</span>
@@ -330,6 +338,13 @@ function FavoritesPage() {
           {selectedIds.size > 0 && (
             <SelectionToolbar selectedCount={selectedIds.size} onClear={clearSelection}>
               <SelectionAction
+                icon="label"
+                label="标签"
+                onClick={() => setShowTagSelector(true)}
+                disabled={unfavoriting}
+              />
+              <SelectionDivider />
+              <SelectionAction
                 icon={unfavoriting ? "" : "heart_minus"}
                 label="取消收藏"
                 onClick={handleUnfavorite}
@@ -341,6 +356,15 @@ function FavoritesPage() {
                 )}
               </SelectionAction>
             </SelectionToolbar>
+          )}
+
+          {/* 批量标签选择器 */}
+          {showTagSelector && selectedIds.size > 0 && (
+            <BatchTagSelector
+              selectedPhotoIds={Array.from(selectedIds)}
+              onComplete={handleTagComplete}
+              onClose={() => setShowTagSelector(false)}
+            />
           )}
 
           {/* 照片网格 */}

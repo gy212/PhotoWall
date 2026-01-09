@@ -124,15 +124,15 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
       {/* 对话框 */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+          className="bg-surface rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-border"
           onClick={(e) => e.stopPropagation()}
         >
           {/* 标题栏 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <h2 className="text-xl font-bold text-gray-900">标签管理</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-xl font-bold text-primary font-serif">标签管理</h2>
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-xl hover:bg-element text-secondary hover:text-primary transition-colors"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -144,7 +144,7 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* 创建新标签 */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700">创建新标签</h3>
+              <h3 className="text-sm font-semibold text-secondary">创建新标签</h3>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -152,12 +152,12 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                   onChange={(e) => setNewTagName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                   placeholder="标签名称"
-                  className="flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="flex-1 px-3 py-2 text-sm bg-element border border-border rounded-xl text-primary placeholder-tertiary focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 />
                 <select
                   value={newTagColor}
                   onChange={(e) => setNewTagColor(e.target.value)}
-                  className="px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="px-3 py-2 text-sm bg-element border border-border rounded-xl text-primary focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   style={{ backgroundColor: newTagColor, color: 'white' }}
                 >
                   {TAG_COLORS.map(color => (
@@ -170,7 +170,7 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                   onClick={handleCreate}
                   disabled={!newTagName.trim()}
                   className={clsx(
-                    "px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary transition-all",
+                    "px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary transition-all",
                     newTagName.trim()
                       ? "hover:bg-primary-hover active:scale-95"
                       : "opacity-50 cursor-not-allowed"
@@ -183,21 +183,21 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
 
             {/* 标签列表 */}
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700">
+              <h3 className="text-sm font-semibold text-secondary">
                 所有标签 ({tags.length})
               </h3>
               {loading ? (
-                <div className="text-center py-8 text-gray-500">加载中...</div>
+                <div className="text-center py-8 text-tertiary">加载中...</div>
               ) : tags.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">暂无标签</div>
+                <div className="text-center py-8 text-tertiary">暂无标签</div>
               ) : (
                 <div className="space-y-2">
-                  {tags.map(({ tag, photoCount }) => (
+                  {tags.map((tagItem) => (
                     <div
-                      key={tag.tagId}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                      key={tagItem.tagId}
+                      className="flex items-center gap-3 p-3 border border-border rounded-xl hover:bg-element/50 transition-colors bg-surface"
                     >
-                      {editingTag?.tagId === tag.tagId ? (
+                      {editingTag?.tagId === tagItem.tagId ? (
                         // 编辑模式
                         <>
                           <input
@@ -205,12 +205,12 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                            className="flex-1 px-3 py-1.5 text-sm border rounded focus:ring-2 focus:ring-primary"
+                            className="flex-1 px-3 py-1.5 text-sm bg-element border border-border rounded-lg text-primary focus:ring-2 focus:ring-primary/20 focus:border-primary"
                           />
                           <select
                             value={editColor}
                             onChange={(e) => setEditColor(e.target.value)}
-                            className="px-2 py-1.5 text-sm border rounded"
+                            className="px-2 py-1.5 text-sm border border-border rounded-lg"
                             style={{ backgroundColor: editColor, color: 'white' }}
                           >
                             {TAG_COLORS.map(color => (
@@ -221,7 +221,7 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                           </select>
                           <button
                             onClick={handleSaveEdit}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors"
+                            className="p-2 text-green-600 hover:bg-green-500/10 rounded-lg transition-colors"
                             title="保存"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +230,7 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                           </button>
                           <button
                             onClick={() => setEditingTag(null)}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                            className="p-2 text-secondary hover:bg-element rounded-lg transition-colors"
                             title="取消"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,14 +242,14 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                         // 显示模式
                         <>
                           <span
-                            className="w-4 h-4 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: tag.color || '#6366F1' }}
+                            className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm"
+                            style={{ backgroundColor: tagItem.color || '#6366F1' }}
                           />
-                          <span className="flex-1 font-medium text-gray-900">{tag.tagName}</span>
-                          <span className="text-sm text-gray-500">{photoCount} 张照片</span>
+                          <span className="flex-1 font-medium text-primary">{tagItem.tagName}</span>
+                          <span className="text-sm text-tertiary">{tagItem.photoCount} 张照片</span>
                           <button
-                            onClick={() => handleStartEdit(tag)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            onClick={() => handleStartEdit(tagItem)}
+                            className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
                             title="编辑"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,8 +257,8 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleDelete(tag)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            onClick={() => handleDelete(tagItem)}
+                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                             title="删除"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,10 +275,10 @@ export function TagManager({ open, onClose, onTagsChange }: TagManagerProps) {
           </div>
 
           {/* 底部按钮 */}
-          <div className="flex justify-end gap-2 px-6 py-4 border-t">
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-border">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 rounded-xl text-sm font-medium text-secondary bg-element hover:bg-hover transition-colors"
             >
               关闭
             </button>

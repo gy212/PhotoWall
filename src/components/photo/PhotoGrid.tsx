@@ -576,7 +576,7 @@ const PhotoGrid = memo(function PhotoGrid({
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <svg
-            className="mx-auto h-16 w-16 text-gray-400"
+            className="mx-auto h-16 w-16 text-tertiary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -589,7 +589,7 @@ const PhotoGrid = memo(function PhotoGrid({
             />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-primary">
-            暂无照片
+            暂无照���
           </h3>
           <p className="mt-2 text-sm text-secondary">
             添加文件夹开始管理您的照片
@@ -684,7 +684,7 @@ const PhotoGrid = memo(function PhotoGrid({
             {Array.from({ length: columns * 2 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700"
+                className="animate-pulse rounded-lg bg-element"
               />
             ))}
           </div>

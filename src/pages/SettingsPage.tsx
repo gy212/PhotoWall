@@ -591,7 +591,7 @@ function SettingsPage() {
                         <Icon name="expand_more" className={clsx("text-base transition-transform", scanIntervalOpen && "rotate-180")} />
                       </button>
                       {scanIntervalOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg bg-zinc-800 border border-white/10 shadow-xl overflow-hidden">
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[120px] rounded-lg bg-surface border border-border shadow-xl overflow-hidden">
                           {[
                             { value: 5, label: '5 分钟' },
                             { value: 10, label: '10 分钟' },
@@ -611,10 +611,10 @@ function SettingsPage() {
                                 setScanIntervalOpen(false);
                               }}
                               className={clsx(
-                                "w-full px-4 py-2 text-sm text-left hover:bg-white/10 transition-colors",
+                                "w-full px-4 py-2 text-sm text-left hover:bg-element transition-colors",
                                 settings.scan.scanInterval / 60 === option.value
                                   ? "text-primary bg-primary/10"
-                                  : "text-white"
+                                  : "text-secondary"
                               )}
                             >
                               {option.label}

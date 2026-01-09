@@ -109,7 +109,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   if (isLoading && showLoading && !thumbnailUrl) {
     return (
       <div
-        className={`flex items-center justify-center bg-gray-100 dark:bg-gray-800 ${className}`}
+        className={`flex items-center justify-center bg-element ${className}`}
         onClick={onClick}
       >
         <LoadingPlaceholder />
@@ -121,7 +121,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   if (error || imageLoadError) {
     return (
       <div
-        className={`flex items-center justify-center bg-gray-100 dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${className}`}
+        className={`flex items-center justify-center bg-element cursor-pointer hover:bg-hover transition-colors ${className}`}
         onClick={handleManualRetry}
         title="点击重试"
       >
@@ -136,7 +136,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
       <div className={`relative ${className}`} onClick={onClick}>
         {/* 加载中显示占位符背景 */}
         {!imageLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+          <div className="absolute inset-0 flex items-center justify-center bg-element">
             <LoadingPlaceholder />
           </div>
         )}
@@ -155,7 +155,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
   // 默认占位符
   return (
     <div
-      className={`flex items-center justify-center bg-gray-100 dark:bg-gray-800 ${className}`}
+      className={`flex items-center justify-center bg-element ${className}`}
       onClick={onClick}
     >
       <DefaultPlaceholder />
@@ -167,7 +167,7 @@ export const Thumbnail: React.FC<ThumbnailProps> = ({
  * 加载中占位符
  */
 const LoadingPlaceholder: React.FC = () => (
-  <div className="flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+  <div className="flex flex-col items-center justify-center text-tertiary">
     <svg
       className="animate-spin h-8 w-8"
       xmlns="http://www.w3.org/2000/svg"
@@ -195,7 +195,7 @@ const LoadingPlaceholder: React.FC = () => (
  * 错误占位符（可点击重试）
  */
 const ErrorPlaceholder: React.FC = () => (
-  <div className="flex flex-col items-center justify-center text-red-400 dark:text-red-500">
+  <div className="flex flex-col items-center justify-center text-red-500">
     <svg
       className="h-8 w-8"
       xmlns="http://www.w3.org/2000/svg"
@@ -218,7 +218,7 @@ const ErrorPlaceholder: React.FC = () => (
  * 默认占位符
  */
 const DefaultPlaceholder: React.FC = () => (
-  <div className="flex flex-col items-center justify-center text-gray-300 dark:text-gray-600">
+  <div className="flex flex-col items-center justify-center text-tertiary">
     <svg
       className="h-12 w-12"
       xmlns="http://www.w3.org/2000/svg"

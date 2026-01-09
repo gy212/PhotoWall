@@ -88,37 +88,31 @@ body *::-webkit-scrollbar-thumb:hover,
     --color-border: var(--border-color);
   }
 
-  /* .dark 类 - Cursor Style Dark (Updated) */
+  /* .dark 类 - VS Code Style Dark Mode */
   .dark {
-    /* 核心色调 - 稍亮的橙色在深色下更醒目 (默认，会被 JS 覆盖) */
+    /* 核心色调 - 稍亮的橙色在深色下更醒目 */
     --primary: #E8957A;
     --primary-light: #F0A890;
     --primary-dark: #DA7756;
 
-    /* 背景体系 - Based on user provided colors */
-    /* black-700: hsl(0 0% 0%) */
-    /* black-400: hsl(0 0% 25%) */
-    
-    --bg-base: hsl(0 0% 0%);
-    --bg-sidebar: hsl(0 0% 0%); /* Sidebar blends with base */
-    --bg-surface: hsl(0 0% 25%);
+    /* 背景体系 - VS Code 风格，层次分明 */
+    --bg-base: #1E1E1E;      /* 主内容区 - VS Code 编辑器背景 */
+    --bg-sidebar: #252526;   /* 侧边栏 - 稍亮，明显区分 */
+    --bg-surface: #2D2D2D;   /* 卡片/面板 - 更亮，突出显示 */
 
-    /* 交互元素 */
-    --bg-element: hsl(0 0% 30%);
-    --bg-hover: hsl(0 0% 35%);
-    --bg-button: hsl(0 0% 25%);
+    /* 交互元素 - 清晰的层次 */
+    --bg-element: #3C3C3C;   /* 元素背景 - 列表项等 */
+    --bg-hover: #454545;     /* 悬停状态 - 明显反馈 */
+    --bg-button: #333333;    /* 按钮背景 */
 
-    /* 文本颜色 */
-    /* black-50: hsl(0 0% 95%) */
-    /* black-100: hsl(0 0% 62%) */
-    
-    --text-primary: hsl(0 0% 95%);
-    --text-secondary: hsl(0 0% 62%);
-    --text-tertiary: hsl(0 0% 45%);
+    /* 文本颜色 - 保持良好对比度 */
+    --text-primary: #E8E8E8; /* 主文本 - 柔和白 */
+    --text-secondary: #ABABAB; /* 次要文本 */
+    --text-tertiary: #808080; /* 辅助文本 - 提高可读性 */
 
-    /* 边框 - Match surface for seamless look or slightly lighter */
-    --border-color: hsl(0 0% 25%);
-    --border-light: hsl(0 0% 20%);
+    /* 边框 - 清晰可见的分隔 */
+    --border-color: #404040; /* 主边框 - 明显可见 */
+    --border-light: #333333; /* 次要边框 */
 
     /* 语义映射更新 */
     --color-background: var(--bg-base);
@@ -243,15 +237,15 @@ body *::-webkit-scrollbar-thumb:hover,
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.2),
-      0 4px 8px -2px rgba(0, 0, 0, 0.3);
+      0 2px 4px rgba(0, 0, 0, 0.3),
+      0 8px 16px -4px rgba(0, 0, 0, 0.4);
   }
 
   .dark .card:hover {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: var(--bg-hover);
     box-shadow:
-      0 4px 6px rgba(0, 0, 0, 0.3),
-      0 10px 20px -4px rgba(0, 0, 0, 0.4);
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      0 12px 24px -4px rgba(0, 0, 0, 0.5);
   }
 
   /* 按钮样式 - Claude/Cursor 风格 */

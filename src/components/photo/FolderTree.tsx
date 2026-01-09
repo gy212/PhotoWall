@@ -102,8 +102,8 @@ const FolderTree = memo(function FolderTree({
             className={clsx(
               'group flex w-full items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
               isSelected
-                ? 'neu-pressed text-primary'
-                : 'hover:bg-secondary/30 text-muted-foreground hover:text-primary'
+                ? 'bg-element text-primary shadow-sm'
+                : 'hover:bg-element text-secondary hover:text-primary'
             )}
             style={{ paddingLeft: `${level * 1.5 + 0.75}rem` }}
           >
@@ -152,7 +152,7 @@ const FolderTree = memo(function FolderTree({
 
             {/* 文件夹图标 */}
             <svg
-              className={clsx('mr-2 h-5 w-5', isExpanded ? 'text-primary' : 'text-muted-foreground')}
+              className={clsx('mr-2 h-5 w-5', isExpanded ? 'text-primary' : 'text-tertiary group-hover:text-primary')}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -176,8 +176,8 @@ const FolderTree = memo(function FolderTree({
                 className={clsx(
                   'ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold',
                   isSelected
-                    ? 'neu-flat text-primary'
-                    : 'bg-secondary/30 text-secondary-foreground'
+                    ? 'bg-surface text-primary'
+                    : 'bg-surface text-tertiary border border-border'
                 )}
               >
                 {folder.photoCount}
@@ -203,7 +203,7 @@ const FolderTree = memo(function FolderTree({
       <div className="flex h-full items-center justify-center p-4">
         <div className="text-center">
           <svg
-            className="mx-auto h-12 w-12 text-gray-400"
+            className="mx-auto h-12 w-12 text-tertiary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -215,7 +215,7 @@ const FolderTree = memo(function FolderTree({
               d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
             />
           </svg>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-2 text-sm text-secondary">
             暂无文件夹
           </p>
         </div>

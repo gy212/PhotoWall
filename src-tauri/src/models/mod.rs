@@ -143,6 +143,8 @@ pub struct SearchFilters {
     pub favorites_only: Option<bool>,
     /// 有 GPS 信息
     pub has_gps: Option<bool>,
+    /// 文件扩展名列表（用于RAW格式筛选）
+    pub file_extensions: Option<Vec<String>>,
 }
 
 /// 搜索结果

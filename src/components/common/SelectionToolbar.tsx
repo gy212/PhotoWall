@@ -18,19 +18,19 @@ export function SelectionToolbar({
   return (
     <div
       className={clsx(
-        'absolute bottom-8 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-300 ring-1 ring-white/20',
+        'absolute bottom-8 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-300 ring-1 ring-white/20 backdrop-blur-md',
         className
       )}
     >
-      <div className="px-3 py-1 bg-white/10 rounded-xl mr-2">
-        <span className="text-sm font-bold tracking-tight whitespace-nowrap">
+      <div className="px-4 py-1.5 bg-white/10 rounded-xl mr-2 flex items-center gap-2">
+        <span className="text-sm font-black tracking-tight whitespace-nowrap">
           已选择 {selectedCount} 项
         </span>
       </div>
 
       {children}
 
-      <div className="w-px h-8 bg-white/20 mx-1" />
+      <div className="w-px h-8 bg-white/20 mx-2" />
 
       <button
         onClick={onClear}
@@ -38,7 +38,7 @@ export function SelectionToolbar({
         title="取消选择"
       >
         <Icon name="close" className="text-2xl group-hover:rotate-90 transition-transform" />
-        <span className="text-[10px] font-medium mt-0.5">取消</span>
+        <span className="text-[10px] font-bold mt-0.5 uppercase">取消</span>
       </button>
     </div>
   );

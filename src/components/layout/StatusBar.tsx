@@ -26,12 +26,12 @@ function StatusBar() {
   const totalSize = photos.reduce((sum: number, p: Photo) => sum + p.fileSize, 0);
 
   return (
-    <div className="flex items-center justify-between px-2 text-xs font-bold text-gray-400">
+    <div className="flex items-center justify-between px-4 py-1 text-xs font-medium text-tertiary bg-surface border-t border-border">
       <div className="flex items-center space-x-4">
         <span>{photos.length} 张照片</span>
         {photos.length > 0 && <span>总大小 {formatTotalSize(totalSize)}</span>}
         {selectedIds.size > 0 && (
-          <span className="text-[#2d3748]">
+          <span className="text-secondary font-bold">
             已选 {selectedIds.size} 项 ({formatTotalSize(selectedSize)})
           </span>
         )}
@@ -39,7 +39,7 @@ function StatusBar() {
       <div className="flex items-center space-x-4">
         {loading ? (
           <span className="flex items-center space-x-2">
-            <span className="inline-block h-2 w-2 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+            <span className="inline-block h-2 w-2 animate-spin rounded-full border-2 border-secondary border-t-transparent" />
             <span>加载中...</span>
           </span>
         ) : (
