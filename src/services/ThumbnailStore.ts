@@ -18,12 +18,26 @@ class ThumbnailStore {
   private listeners = new Map<string, Set<ThumbnailListener>>();
   private unlistenFunction: UnlistenFn | null = null;
   private isListening = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    // Lazy initialization in init()
+    // 立即初始化（不等待订阅）
+    this.init();
   }
 
-  async init() {
+  /**
+   * 初始化事件监听
+   * 应用启动时自动调用，确保事件通道永远在线
+   */
+  async init(): Promise<void> {
+    if (this.isListening) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this.doInit();
+    return this.initPromise;
+  }
+
+  private async doInit(): Promise<void> {
     if (this.isListening) return;
     this.isListening = true;
 
@@ -53,6 +67,7 @@ class ThumbnailStore {
     } catch (e) {
       console.error('Failed to listen to thumbnail-ready event:', e);
       this.isListening = false;
+      this.initPromise = null;
     }
   }
 
@@ -78,14 +93,29 @@ class ThumbnailStore {
   subscribe(fileHash: string, size: string, listener: ThumbnailListener): () => void {
     const key = this.getCacheKey(fileHash, size);
 
+    // If initial eager init failed (e.g. Tauri internals not ready yet), retry on first real usage.
+    if (!this.isListening) {
+      void this.init().catch(() => {
+        // Ignore: will retry on next subscribe/use.
+      });
+    }
+
     if (!this.listeners.has(key)) {
       this.listeners.set(key, new Set());
     }
 
     this.listeners.get(key)!.add(listener);
 
-    // Make sure we are listening to global events
-    this.init();
+    // 不再需要在这里调用 init()，因为构造函数已经初始化了
+
+    // ✅ 关键修复：订阅时立即推送已有缓存，避免竞态条件
+    // 如果缓存已存在，立即回调一次，确保组件能收到已缓存的数据
+    const cached = this.cache.get(key);
+    if (cached) {
+      // 使用 Promise.resolve().then() 确保在当前同步代码执行完后立即回调
+      // 避免在 subscribe 调用期间触发状态更新
+      Promise.resolve().then(() => listener(cached));
+    }
 
     return () => {
       const set = this.listeners.get(key);

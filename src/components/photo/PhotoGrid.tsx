@@ -5,7 +5,7 @@ import { Virtuoso, type VirtuosoHandle, type ListRange } from 'react-virtuoso';
 import clsx from 'clsx';
 import PhotoThumbnail from './PhotoThumbnail';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { enqueueThumbnails, isThumbnailCached, checkThumbnailsCached, addToCacheExternal, type ThumbnailSize } from '@/hooks';
+import { enqueueThumbnails, isThumbnailCached, checkThumbnailsCached, addToCacheExternal, type ThumbnailSize, thumbnailRequestManager } from '@/hooks';
 import type { Photo } from '@/types';
 import { getAspectRatioCategory, type AspectRatioCategory } from '@/types';
 import { groupByDate, type DateGroup } from '@/utils/dateGrouping';
@@ -65,6 +65,32 @@ function resolveScrollbarMode(): ScrollbarMode {
 }
 
 // 自定义 Scroller
+function findScrollParent(element: HTMLElement | null): HTMLElement | null {
+  if (!element) return null;
+
+  let parent: HTMLElement | null = element.parentElement;
+  while (parent) {
+    const style = window.getComputedStyle(parent);
+    const overflowY = style.overflowY;
+    const isScrollable = overflowY === 'auto' || overflowY === 'scroll';
+    if (isScrollable && parent.scrollHeight > parent.clientHeight) {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
+function areSetsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
+}
+
 const GridScroller = forwardRef<HTMLDivElement, { style?: CSSProperties; children?: React.ReactNode }>(
   ({ style, children, ...props }, ref) => {
     const [scrollbarMode, setScrollbarMode] = useState<ScrollbarMode>('auto');
@@ -151,6 +177,9 @@ const PhotoGrid = memo(function PhotoGrid({
   const containerRef = useRef<HTMLDivElement>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1024);
+  const [activeGroupDates, setActiveGroupDates] = useState<Set<string>>(() => new Set());
+  const groupElementsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const activeGroupDatesRef = useRef<Set<string>>(new Set());
 
   // 计算列数
   const columns = useMemo(() => {
@@ -262,6 +291,56 @@ const PhotoGrid = memo(function PhotoGrid({
     };
   }, []);
 
+  // Embedded + grouped mode: keep active groups in sync with the actual scroll position.
+  // This is a robust fallback for nested scrollers (HomePage uses an overflow container, not window scroll).
+  useEffect(() => {
+    if (!embedded || !groupByDateEnabled) return;
+
+    const scrollRoot = findScrollParent(containerRef.current);
+    const scrollTarget: HTMLElement | Window = scrollRoot ?? window;
+    const marginPx = 1200;
+    let rafId: number | null = null;
+
+    const computeActive = () => {
+      rafId = null;
+
+      const rootRect =
+        scrollRoot !== null
+          ? scrollRoot.getBoundingClientRect()
+          : ({ top: 0, bottom: window.innerHeight } as DOMRect);
+
+      const next = new Set<string>();
+      for (const [date, el] of groupElementsRef.current) {
+        const rect = el.getBoundingClientRect();
+        const visible =
+          rect.bottom >= rootRect.top - marginPx && rect.top <= rootRect.bottom + marginPx;
+        if (visible) next.add(date);
+      }
+
+      if (!areSetsEqual(activeGroupDatesRef.current, next)) {
+        activeGroupDatesRef.current = next;
+        setActiveGroupDates(next);
+      }
+    };
+
+    const schedule = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(computeActive);
+    };
+
+    schedule();
+    scrollTarget.addEventListener('scroll', schedule, { passive: true } as AddEventListenerOptions);
+    window.addEventListener('resize', schedule);
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      scrollTarget.removeEventListener('scroll', schedule as EventListener);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [embedded, groupByDateEnabled, dateGroups.length]);
+
   // 嵌入模式下的无限滚动：监听哨兵元素进入视口
   useEffect(() => {
     if (!embedded || !groupByDateEnabled || !hasMore || !onLoadMore) return;
@@ -269,18 +348,102 @@ const PhotoGrid = memo(function PhotoGrid({
     const sentinel = loadMoreSentinelRef.current;
     if (!sentinel) return;
 
+    const scrollRoot = findScrollParent(containerRef.current);
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loading) {
           onLoadMore();
         }
       },
-      { rootMargin: '800px' }
+      { root: scrollRoot ?? null, rootMargin: '800px' }
     );
 
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [embedded, groupByDateEnabled, hasMore, loading, onLoadMore]);
+
+  // ✅ 关键修复：嵌入模式下的首屏预取
+  // 使用 IntersectionObserver 观察日期分组块，进入视口时批量预取
+  const groupObserverRef = useRef<IntersectionObserver | null>(null);
+  const observedGroupsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!embedded || !groupByDateEnabled) return;
+
+    const scrollRoot = findScrollParent(containerRef.current);
+
+    // 创建 IntersectionObserver 观察日期分组块
+    groupObserverRef.current = new IntersectionObserver(
+      (entries) => {
+        const visiblePhotos: Photo[] = [];
+
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const groupDate = entry.target.getAttribute('data-group-date');
+            if (!groupDate) continue;
+
+            if (!observedGroupsRef.current.has(groupDate)) {
+              observedGroupsRef.current.add(groupDate);
+              // 找到对应的日期分组
+              const group = dateGroups.find(g => g.date === groupDate);
+              if (group) {
+                visiblePhotos.push(...group.items);
+              }
+            }
+          }
+        }
+
+        // 批量上报需求给 manager
+        if (visiblePhotos.length > 0) {
+          thumbnailRequestManager.demandBatch(
+            visiblePhotos.map((photo, idx) => ({
+              fileHash: photo.fileHash,
+              size: 'small' as ThumbnailSize,
+              sourcePath: photo.filePath,
+              priority: 50 - idx,
+              width: photo.width,
+              height: photo.height,
+              visible: true,
+            }))
+          );
+          // 同时预取 tiny
+          thumbnailRequestManager.demandBatch(
+            visiblePhotos.map((photo, idx) => ({
+              fileHash: photo.fileHash,
+              size: 'tiny' as ThumbnailSize,
+              sourcePath: photo.filePath,
+              priority: 60 - idx, // tiny 优先级更高
+              width: photo.width,
+              height: photo.height,
+              visible: true,
+            }))
+          );
+        }
+      },
+      { root: scrollRoot ?? null, rootMargin: '800px 0px' }
+    );
+
+    for (const el of groupElementsRef.current.values()) {
+      groupObserverRef.current.observe(el);
+    }
+
+    return () => {
+      groupObserverRef.current?.disconnect();
+      groupObserverRef.current = null;
+    };
+  }, [embedded, groupByDateEnabled, dateGroups]);
+
+  // 页面回归时强制 flush（visibilitychange 和 focus 已在 manager 中处理）
+  // 但这里额外处理路由变化回到当前页面的情况
+  const prevLocationKeyRef2 = useRef(location.key);
+  useEffect(() => {
+    if (prevLocationKeyRef2.current !== location.key) {
+      prevLocationKeyRef2.current = location.key;
+      // 路由变化，强制 flush 一次
+      thumbnailRequestManager.forceFlush();
+    }
+  }, [location.key]);
 
   // 渲染单行
   const rowContent = useCallback(
@@ -441,7 +604,19 @@ const PhotoGrid = memo(function PhotoGrid({
     return (
       <div ref={containerRef} className="w-full" style={{ paddingTop: gap }}>
         {dateGroups.map((group) => (
-          <div key={group.date} className="mb-8">
+          <div
+            key={group.date}
+            className="mb-8"
+            data-group-date={group.date}
+            ref={(el) => {
+              if (el) {
+                groupElementsRef.current.set(group.date, el);
+                groupObserverRef.current?.observe(el);
+              } else {
+                groupElementsRef.current.delete(group.date);
+              }
+            }}
+          >
             {/* 日期分组 Header - Solid Background */}
             <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface border-b border-border">
               <div className="flex items-baseline justify-between">
@@ -482,6 +657,7 @@ const PhotoGrid = memo(function PhotoGrid({
                       photo={photo}
                       aspectCategory={aspectCategory}
                       selected={selectedIds.has(photo.photoId)}
+                      thumbnailsEnabled={activeGroupDates.has(group.date)}
                       isScrolling={false}
                       onClick={onPhotoClick}
                       onDoubleClick={onPhotoDoubleClick}

@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect, useMemo } from 'react';
+import { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import clsx from 'clsx';
 import type { Photo, AspectRatioCategory } from '@/types';
@@ -12,6 +12,8 @@ interface PhotoThumbnailProps {
   aspectCategory?: AspectRatioCategory;
   /** 是否选中 */
   selected?: boolean;
+  /** æ˜¯å¦å¯ç”¨ç¼©ç•¥å›¾åŠ è½½ï¼ˆå¯ç”¨äºŽ Scroll-Activated åŠ è½½ç­‰æƒ…å†µï¼‰ */
+  thumbnailsEnabled?: boolean;
   /** 是否正在滚动（滚动时延迟加载缩略图） */
   isScrolling?: boolean;
   /** 点击事件 */
@@ -37,10 +39,16 @@ const detectTauriRuntime = () => {
   return typeof internals?.invoke === 'function';
 };
 
+/** 最大重试次数 */
+const MAX_RETRY_COUNT = 2;
+/** 重试延迟（毫秒） */
+const RETRY_DELAY_MS = 300;
+
 const PhotoThumbnail = memo(function PhotoThumbnail({
   photo,
   aspectCategory = 'normal',
   selected = false,
+  thumbnailsEnabled = true,
   isScrolling = false,
   onClick,
   onDoubleClick,
@@ -50,20 +58,25 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   const [tinyLoaded, setTinyLoaded] = useState(false);
   const [fullLoaded, setFullLoaded] = useState(false);
   const [localError, setLocalError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tinyImgRef = useRef<HTMLImageElement | null>(null);
+  const fullImgRef = useRef<HTMLImageElement | null>(null);
   const isTauriRuntime = useMemo(() => detectTauriRuntime(), []);
+  const thumbnailsActive = isTauriRuntime && thumbnailsEnabled;
   const targetThumbnailSize = useMemo(() => {
     // 列表/网格页优先保证流畅性，避免触发后端更重的 large 路径
     return 'small' as const;
   }, []);
 
   // 使用渐进式加载：先加载 tiny 模糊占位图，再加载完整缩略图
-  const { tinyUrl, fullUrl, isLoadingFull, showTiny, error: thumbnailError } = useThumbnailProgressive(
+  const { tinyUrl, fullUrl, isLoadingFull, showTiny, error: thumbnailError, reload } = useThumbnailProgressive(
     photo.filePath,
     photo.fileHash,
     {
       size: targetThumbnailSize,
       // 始终启用，但滚动时暂停新请求（保留已缓存结果）
-      enabled: isTauriRuntime,
+      enabled: thumbnailsActive,
       suspendNewRequests: isScrolling,
       // 滚动时防抖：快速划过的条目通常会在延迟内卸载，从而避免发起后端生成请求
       loadDelay: 80,
@@ -77,7 +90,38 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     setTinyLoaded(false);
     setFullLoaded(false);
     setLocalError(false);
+    setRetryCount(0);
+    // 清理重试定时器
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
   }, [tinyUrl, fullUrl, photo.photoId]);
+
+  // Cache-hit fallback: sometimes `onLoad` might not fire for already-cached images; ensure state is updated.
+  useEffect(() => {
+    if (!thumbnailsActive) return;
+
+    if (tinyUrl && tinyImgRef.current?.complete && tinyImgRef.current.naturalWidth > 0) {
+      setTinyLoaded(true);
+    }
+
+    if (fullImageUrl && fullImgRef.current?.complete && fullImgRef.current.naturalWidth > 0) {
+      setFullLoaded(true);
+      setLocalError(false);
+      setRetryCount(0);
+    }
+  }, [thumbnailsActive, tinyUrl, fullImageUrl]);
+
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleClick = useCallback(
     (e: MouseEvent) => {
@@ -113,15 +157,27 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
   const handleFullLoad = useCallback(() => {
     setFullLoaded(true);
     setLocalError(false);
+    setRetryCount(0); // 加载成功，重置重试计数
   }, []);
 
+  // ✅ 关键修复：onError 兜底重试逻辑
+  // 当图片加载失败时（可能是切页瞬间 asset 读不到），延迟后重试
   const handleError = useCallback(() => {
-    setFullLoaded(true);
-    setLocalError(true);
-  }, []);
+    if (retryCount < MAX_RETRY_COUNT) {
+      // 还有重试机会，延迟后触发 reload
+      setRetryCount(prev => prev + 1);
+      retryTimerRef.current = setTimeout(() => {
+        reload();
+      }, RETRY_DELAY_MS);
+    } else {
+      // 重试次数用尽，显示错误状态
+      setFullLoaded(true);
+      setLocalError(true);
+    }
+  }, [retryCount, reload]);
 
   const hasError = isTauriRuntime ? Boolean(thumbnailError) || localError : localError;
-  const isLoading = isTauriRuntime
+  const isLoading = thumbnailsActive
     ? !hasError &&
     !showTiny &&
     (isLoadingFull ||
@@ -150,6 +206,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       {/* 极小模糊占位图（渐进式加载第一阶段） */}
       {!hasError && tinyUrl && showTiny && (
         <img
+          ref={tinyImgRef}
           src={tinyUrl}
           alt=""
           className={clsx(
@@ -165,6 +222,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       {/* 完整缩略图 - 内缩 1px 以防遮挡边框 (可选，这里保持充满) */}
       {!hasError && fullImageUrl && (
         <img
+          ref={fullImgRef}
           src={fullImageUrl}
           alt={photo.fileName}
           className={clsx(
