@@ -25,7 +25,18 @@ releases/
 
 # Rust/Tauri
 src-tauri/target/
+src-tauri/target-*/
 src-tauri/gen/
+src-tauri/.cargo/
+
+# Native editor build output
+src-tauri/native/out/
+
+# DLL dependencies (download separately or build locally)
+src-tauri/*.dll
+
+# vips development files
+src-tauri/vips-dev-*/
 
 # LibRaw (binary, download separately)
 LibRaw-*/
@@ -38,6 +49,7 @@ src/PhotoWall.Imaging/
 
 # Editor directories and files
 .vscode/
+.vs/
 .idea/
 .qoder/
 .claude/
@@ -74,7 +86,7 @@ PhotoWallData/
 nul
 
 # Reference/Design files (not essential)
-ui仿照/
+临时图片/
 优化建议/
 
 # Internal development docs (keep libraw docs)
