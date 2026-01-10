@@ -507,6 +507,44 @@ impl Database {
         Ok(rows)
     }
 
+    /// 获取最近编辑的照片（按 date_modified 降序）
+    pub fn get_recently_edited_photo(&self) -> AppResult<Option<Photo>> {
+        let conn = self.connection()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT * FROM photos
+            WHERE is_deleted = 0 AND date_modified IS NOT NULL
+            ORDER BY date_modified DESC
+            LIMIT 1
+            "#,
+            [],
+            row_to_photo,
+        );
+
+        match result {
+            Ok(photo) => Ok(Some(photo)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(AppError::Database(e)),
+        }
+    }
+
+    /// 更新照片尺寸（编辑后调用）
+    pub fn update_photo_dimensions(&self, photo_id: i64, width: u32, height: u32) -> AppResult<bool> {
+        let conn = self.connection()?;
+        let rows = conn.execute(
+            "UPDATE photos SET width = ?1, height = ?2, date_modified = ?3 WHERE photo_id = ?4",
+            params![
+                width as i64,
+                height as i64,
+                crate::models::photo::chrono_now_pub(),
+                photo_id
+            ],
+        )?;
+
+        Ok(rows > 0)
+    }
+
     /// 检查文件路径是否存在
     pub fn photo_exists_by_path(&self, file_path: &str) -> AppResult<bool> {
         let conn = self.connection()?;

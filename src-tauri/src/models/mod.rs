@@ -10,7 +10,7 @@ pub mod settings;
 // 重新导出常用类型
 pub use photo::{Photo, CreatePhoto, UpdatePhoto};
 pub use tag::{Tag, CreateTag, UpdateTag, PhotoTag, TagWithCount};
-pub use album::{Album, CreateAlbum, UpdateAlbum, AlbumPhoto, AlbumWithCount};
+pub use album::{Album, CreateAlbum, UpdateAlbum, AlbumPhoto, AlbumWithCount, RecentlyEditedAlbum};
 pub use settings::{
     AppSettings, ThemeMode, ScanSettings, ThumbnailSettings, PerformanceSettings,
 };

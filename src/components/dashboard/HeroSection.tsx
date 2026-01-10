@@ -1,10 +1,26 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getFavoritePhotos, getAssetUrl } from '@/services/api';
+import { getFavoritePhotos, getAssetUrl, getRecentlyEditedPhoto } from '@/services/api';
 import { useMemo } from 'react';
 import type { Photo } from '@/types';
 
 import { Icon } from '@/components/common/Icon';
+
+/** 格式化相对时间 */
+function formatRelativeTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins} 分钟前`;
+    if (diffHours < 24) return `${diffHours} 小时前`;
+    if (diffDays < 30) return `${diffDays} 天前`;
+    return date.toLocaleDateString('zh-CN');
+}
 
 export default function HeroSection() {
     const navigate = useNavigate();
@@ -13,7 +29,14 @@ export default function HeroSection() {
     const { data: favoritesData, isLoading } = useQuery({
         queryKey: ['favoritePhotos', 'hero'],
         queryFn: () => getFavoritePhotos({ page: 1, pageSize: 10 }),
-        staleTime: 30000, // 30秒内不重新请求
+        staleTime: 30000,
+    });
+
+    // 获取最近编辑的照片
+    const { data: recentPhoto } = useQuery({
+        queryKey: ['recentlyEditedPhoto'],
+        queryFn: getRecentlyEditedPhoto,
+        staleTime: 30000,
     });
 
     // 随机选择一张展示
@@ -37,12 +60,10 @@ export default function HeroSection() {
                 className={`col-span-8 card rounded-3xl relative overflow-hidden flex flex-col border-none shadow-2xl ${hasFavorites ? 'cursor-pointer group' : ''}`}
             >
                 {isLoading ? (
-                    // 加载状态
                     <div className="absolute inset-0 flex items-center justify-center bg-element">
                         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
                     </div>
                 ) : featuredPhoto ? (
-                    // 有精选照片
                     <>
                         <img
                             src={getAssetUrl(featuredPhoto.filePath)}
@@ -66,7 +87,6 @@ export default function HeroSection() {
                         </div>
                     </>
                 ) : (
-                    // 空状态
                     <>
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/5" />
                         <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
@@ -82,18 +102,48 @@ export default function HeroSection() {
                 )}
             </div>
 
-            {/* 右侧：文件合集入口 */}
+            {/* 右侧：最近编辑的照片 */}
             <div
-                onClick={() => navigate('/folders')}
-                className="col-span-4 card rounded-3xl relative overflow-hidden group cursor-pointer flex flex-col items-center justify-center text-center p-6 border border-border bg-surface transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:-translate-y-1"
+                onClick={() => navigate('/')}
+                className="col-span-4 card rounded-3xl relative overflow-hidden group cursor-pointer flex flex-col border border-border bg-surface transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:-translate-y-1"
             >
-                <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                <div className="relative z-10 w-16 h-16 rounded-3xl bg-element border border-border flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-300 shadow-inner">
-                    <Icon name="folder_open" className="text-3xl text-primary" size={32} />
-                </div>
-                <h3 className="text-xl font-bold relative z-10 text-primary font-serif">文件合集</h3>
-                <p className="text-secondary text-sm mt-2 relative z-10 max-w-[180px] leading-snug">浏览所有文件夹和本地存储来源</p>
+                {recentPhoto ? (
+                    <>
+                        <img
+                            src={getAssetUrl(recentPhoto.filePath)}
+                            alt={recentPhoto.fileName}
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                        <div className="relative z-10 mt-auto p-6">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="p-1 rounded-lg bg-primary/20 backdrop-blur-md">
+                                    <Icon name="schedule" className="text-primary text-lg" />
+                                </div>
+                                <span className="text-primary text-xs font-bold uppercase tracking-widest">最近编辑</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-1 font-serif truncate">
+                                {recentPhoto.fileName}
+                            </h3>
+                            <p className="text-white/60 text-sm">
+                                {recentPhoto.dateModified ? formatRelativeTime(recentPhoto.dateModified) : ''}
+                            </p>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+                            <div className="relative z-10 w-16 h-16 rounded-3xl bg-element border border-border flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-300 shadow-inner">
+                                <Icon name="schedule" className="text-3xl text-primary" size={32} />
+                            </div>
+                            <h3 className="text-xl font-bold relative z-10 text-primary font-serif">最近编辑</h3>
+                            <p className="text-secondary text-sm mt-2 relative z-10 max-w-[180px] leading-snug">
+                                收藏或评分照片后，这里将显示您最近编辑的照片
+                            </p>
+                        </div>
+                    </>
+                )}
             </div>
         </section>
     );

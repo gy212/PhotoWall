@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Tag } from '@/types';
 import { getAllTags, getTagsForPhoto, addTagToPhoto, removeTagFromPhoto, createTag } from '@/services/api';
 import clsx from 'clsx';
+import { Icon } from '@/components/common/Icon';
 
 interface TagSelectorProps {
   /** 照片ID */
@@ -137,9 +138,7 @@ export function TagSelector({ photoId, onTagsChange }: TagSelectorProps) {
             title="点击移除"
           >
             <span>{tag.tagName}</span>
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" size={14} className="opacity-75 hover:opacity-100" />
           </button>
         ))}
       </div>
@@ -197,9 +196,7 @@ export function TagSelector({ photoId, onTagsChange }: TagSelectorProps) {
                     creating && "opacity-50 cursor-not-allowed"
                   )}
                 >
-                  <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+                  <Icon name="add" size={16} className="text-primary" />
                   <span className="text-primary font-medium">
                     创建标签 "{searchQuery}"
                   </span>

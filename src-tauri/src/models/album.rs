@@ -87,6 +87,17 @@ pub struct AlbumWithCount {
     pub photo_count: i64,
 }
 
+/// 最近编辑的相册（用于首页展示）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentlyEditedAlbum {
+    pub album_id: i64,
+    pub album_name: String,
+    pub photo_count: i64,
+    pub last_edited: String,
+    pub cover_photo_path: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

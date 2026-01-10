@@ -217,6 +217,12 @@ pub async fn get_photo_stats(state: State<'_, AppState>) -> Result<PhotoStats, S
     state.db.get_photo_stats().map_err(|e| e.to_string())
 }
 
+/// 获取最近编辑的照片
+#[tauri::command]
+pub async fn get_recently_edited_photo(state: State<'_, AppState>) -> Result<Option<Photo>, String> {
+    state.db.get_recently_edited_photo().map_err(|e| e.to_string())
+}
+
 // ==================== 回收站功能 ====================
 
 /// 获取已删除的照片（回收站）

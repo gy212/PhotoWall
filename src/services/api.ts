@@ -12,6 +12,7 @@ import type {
   Album,
   TagWithCount,
   AlbumWithCount,
+  RecentlyEditedAlbum,
   SearchFilters,
   PaginationParams,
   PaginatedResult,
@@ -269,6 +270,13 @@ export async function getPhotoStats(): Promise<PhotoStats> {
   return invoke<PhotoStats>('get_photo_stats');
 }
 
+/**
+ * 获取最近编辑的照片
+ */
+export async function getRecentlyEditedPhoto(): Promise<Photo | null> {
+  return invoke<Photo | null>('get_recently_edited_photo');
+}
+
 // ============ 标签管理 ============
 
 /**
@@ -492,6 +500,13 @@ export async function setAlbumCover(albumId: number, photoId: number): Promise<b
  */
 export async function reorderAlbumPhotos(albumId: number, photoIds: number[]): Promise<boolean> {
   return invoke<boolean>('reorder_album_photos', { albumId, photoIds });
+}
+
+/**
+ * 获取最近编辑的相册
+ */
+export async function getRecentlyEditedAlbum(): Promise<RecentlyEditedAlbum | null> {
+  return invoke<RecentlyEditedAlbum | null>('get_recently_edited_album');
 }
 
 // ============ 工具函数 ============
@@ -863,4 +878,45 @@ export async function setCompositionTint(
   opacity: number
 ): Promise<void> {
   return invoke<void>('set_composition_tint', { r, g, b, opacity });
+}
+
+// ============ 照片编辑 ============
+
+import type { EditParams } from '@/types';
+
+/**
+ * 检查照片是否可编辑（非 RAW 格式）
+ */
+export async function isPhotoEditable(filePath: string): Promise<boolean> {
+  return invoke<boolean>('is_photo_editable', { filePath });
+}
+
+/**
+ * 应用编辑并保存照片
+ * @param photoId 照片ID
+ * @param params 编辑参数
+ * @param saveAsCopy 是否另存为副本
+ * @returns 更新后的照片信息
+ */
+export async function applyPhotoEdits(
+  photoId: number,
+  params: EditParams,
+  saveAsCopy: boolean = false
+): Promise<Photo> {
+  return invoke<Photo>('apply_photo_edits', { photoId, params, saveAsCopy });
+}
+
+/**
+ * 获取编辑预览（Base64 编码的图像）
+ * @param sourcePath 源文件路径
+ * @param params 编辑参数
+ * @param maxSize 预览最大尺寸
+ * @returns Base64 编码的 JPEG 图像
+ */
+export async function getEditPreview(
+  sourcePath: string,
+  params: EditParams,
+  maxSize?: number
+): Promise<string> {
+  return invoke<string>('get_edit_preview', { sourcePath, params, maxSize });
 }

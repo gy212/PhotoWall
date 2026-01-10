@@ -106,24 +106,30 @@ function SettingsPage() {
 
   // 监听滚动，更新当前活动区块
   useEffect(() => {
-    const handleScroll = (e: Event) => {
-      const container = e.target as HTMLElement;
+    const handleScroll = () => {
+      const container = document.getElementById('settings-content');
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
       const scrollTop = container.scrollTop;
-      const clientHeight = container.clientHeight;
       const scrollHeight = container.scrollHeight;
+      const clientHeight = container.clientHeight;
 
       // 检查是否滚动到底部 (给予 5px 误差)
       if (Math.abs(scrollHeight - clientHeight - scrollTop) <= 5) {
-        const lastSection = settingsSections[settingsSections.length - 1];
-        setActiveSection(lastSection.id);
+        setActiveSection(settingsSections[settingsSections.length - 1].id);
         return;
       }
 
+      // 使用 getBoundingClientRect 计算相对位置
       let currentSection = 'sync';
       for (const section of settingsSections) {
         const el = sectionRefs.current[section.id];
-        if (el && el.offsetTop - 100 <= scrollTop) {
-          currentSection = section.id;
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= containerRect.top + 100) {
+            currentSection = section.id;
+          }
         }
       }
       setActiveSection(currentSection);

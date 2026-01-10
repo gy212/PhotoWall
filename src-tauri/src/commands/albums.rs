@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::models::{
     album::{CreateAlbum, UpdateAlbum},
-    Album, AlbumWithCount,
+    Album, AlbumWithCount, RecentlyEditedAlbum,
 };
 use crate::AppState;
 
@@ -210,4 +210,15 @@ pub async fn remove_photos_from_album(
         }
     }
     Ok(count)
+}
+
+/// 获取最近编辑的相册
+#[tauri::command]
+pub async fn get_recently_edited_album(
+    state: State<'_, AppState>,
+) -> Result<Option<RecentlyEditedAlbum>, String> {
+    state
+        .db
+        .get_recently_edited_album()
+        .map_err(|e| e.to_string())
 }

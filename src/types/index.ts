@@ -104,6 +104,17 @@ export interface AlbumWithCount {
 }
 
 /**
+ * 最近编辑的相册（用于首页展示）
+ */
+export interface RecentlyEditedAlbum {
+  albumId: number;
+  albumName: string;
+  photoCount: number;
+  lastEdited: string;
+  coverPhotoPath?: string;
+}
+
+/**
  * 缩略图尺寸
  */
 export type ThumbnailSize = 'small' | 'medium' | 'large';
@@ -409,3 +420,81 @@ export function getAspectRatioCategory(width?: number, height?: number): AspectR
   if (ratio < 0.5) return 'tall';
   return 'normal';
 }
+
+// ============ 照片编辑类型 ============
+
+/**
+ * 翻转方向
+ */
+export type FlipDirection = 'horizontal' | 'vertical';
+
+/**
+ * 裁剪区域
+ */
+export interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 编辑操作类型
+ */
+export type EditOperation =
+  | { type: 'rotate'; degrees: number }
+  | { type: 'flip'; direction: FlipDirection }
+  | { type: 'crop'; rect: CropRect }
+  | { type: 'brightness'; value: number }
+  | { type: 'contrast'; value: number }
+  | { type: 'saturation'; value: number }
+  | { type: 'exposure'; value: number }
+  | { type: 'sharpen'; value: number }
+  | { type: 'blur'; value: number }
+  | { type: 'highlights'; value: number }
+  | { type: 'shadows'; value: number }
+  | { type: 'temperature'; value: number }
+  | { type: 'tint'; value: number }
+  | { type: 'vignette'; value: number }
+  | { type: 'autoEnhance' };
+
+/**
+ * 编辑参数
+ */
+export interface EditParams {
+  operations: EditOperation[];
+}
+
+/**
+ * 编辑调整值（用于 UI 滑块）
+ */
+export interface EditAdjustments {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  exposure: number;
+  highlights: number;
+  shadows: number;
+  temperature: number;
+  tint: number;
+  sharpen: number;
+  blur: number;
+  vignette: number;
+}
+
+/**
+ * 默认编辑调整值
+ */
+export const DEFAULT_ADJUSTMENTS: EditAdjustments = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  exposure: 0,
+  highlights: 0,
+  shadows: 0,
+  temperature: 0,
+  tint: 0,
+  sharpen: 0,
+  blur: 0,
+  vignette: 0,
+};

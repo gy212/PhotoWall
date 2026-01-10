@@ -4,7 +4,7 @@ use rusqlite::{params, Row};
 
 use crate::models::{
     album::{CreateAlbum, UpdateAlbum},
-    Album, AlbumWithCount,
+    Album, AlbumWithCount, RecentlyEditedAlbum,
 };
 use crate::utils::error::{AppError, AppResult};
 
@@ -318,6 +318,45 @@ impl Database {
 
             Ok(())
         })
+    }
+
+    /// 获取最近编辑的相册（按最新添加照片时间排序）
+    pub fn get_recently_edited_album(&self) -> AppResult<Option<RecentlyEditedAlbum>> {
+        let conn = self.connection()?;
+
+        let result = conn.query_row(
+            r#"
+            SELECT
+                a.album_id,
+                a.album_name,
+                COUNT(ap.photo_id) as photo_count,
+                MAX(ap.date_added) as last_edited,
+                p.file_path as cover_photo_path
+            FROM albums a
+            INNER JOIN album_photos ap ON a.album_id = ap.album_id
+            LEFT JOIN photos p ON a.cover_photo_id = p.photo_id
+            GROUP BY a.album_id
+            HAVING photo_count > 0
+            ORDER BY last_edited DESC
+            LIMIT 1
+            "#,
+            [],
+            |row| {
+                Ok(RecentlyEditedAlbum {
+                    album_id: row.get("album_id")?,
+                    album_name: row.get("album_name")?,
+                    photo_count: row.get("photo_count")?,
+                    last_edited: row.get("last_edited")?,
+                    cover_photo_path: row.get("cover_photo_path")?,
+                })
+            },
+        );
+
+        match result {
+            Ok(album) => Ok(Some(album)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(AppError::Database(e)),
+        }
     }
 }
 

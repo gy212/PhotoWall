@@ -12,6 +12,9 @@ pub mod watcher;
 pub mod settings;
 pub mod libraw;
 pub mod wic;
+pub mod editor;
+pub mod colorspace;
+pub mod native_editor;
 
 // 重新导出常用类型
 pub use scanner::{Scanner, ScanOptions, ScanResult, ScanProgress, is_image_file, SUPPORTED_FORMATS};
@@ -22,3 +25,4 @@ pub use thumbnail::{ThumbnailService, ThumbnailSize, ThumbnailResult, CacheStats
 pub use thumbnail_queue::{ThumbnailQueue, ThumbnailTask};
 pub use watcher::{FileWatcher, WatcherConfig, FileChangeEvent, FileChangeType};
 pub use settings::SettingsManager;
+pub use editor::{EditorService, EditParams, EditOperation, FlipDirection, CropRect};

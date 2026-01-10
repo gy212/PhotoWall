@@ -30,6 +30,7 @@ use commands::{
     get_photos_cursor, get_favorite_photos,
     get_photos_by_tag, get_photos_by_album, set_photo_rating, set_photo_favorite,
     set_photos_favorite, get_camera_models, get_lens_models, get_photo_stats,
+    get_recently_edited_photo,
     // trash
     get_deleted_photos, soft_delete_photos, restore_photos, permanent_delete_photos,
     empty_trash, get_trash_stats,
@@ -42,7 +43,7 @@ use commands::{
     create_album, get_album, get_album_by_name, update_album, delete_album, get_all_albums,
     get_all_albums_with_count, add_photo_to_album, add_photos_to_album, remove_photo_from_album,
     remove_all_photos_from_album, get_photo_ids_in_album, get_albums_for_photo, set_album_cover,
-    reorder_album_photos, remove_photos_from_album,
+    reorder_album_photos, remove_photos_from_album, get_recently_edited_album,
     // thumbnails
     generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
     get_libraw_status, get_thumbnail_stats, check_thumbnails_cached, warm_thumbnail_cache, get_raw_preview,
@@ -68,6 +69,8 @@ use commands::{
     get_folder_tree, get_folder_children, get_photos_by_folder, get_folder_photo_count,
     // logging
     log_frontend,
+    // edit
+    apply_photo_edits, get_edit_preview, is_photo_editable,
 };
 use db::Database;
 
@@ -182,6 +185,7 @@ pub fn run() {
             get_camera_models,
             get_lens_models,
             get_photo_stats,
+            get_recently_edited_photo,
             // trash
             get_deleted_photos,
             soft_delete_photos,
@@ -222,6 +226,7 @@ pub fn run() {
             set_album_cover,
             reorder_album_photos,
             remove_photos_from_album,
+            get_recently_edited_album,
             // thumbnails
             generate_thumbnail,
             enqueue_thumbnail,
@@ -268,6 +273,10 @@ pub fn run() {
             get_folder_photo_count,
             // logging
             log_frontend,
+            // edit
+            apply_photo_edits,
+            get_edit_preview,
+            is_photo_editable,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

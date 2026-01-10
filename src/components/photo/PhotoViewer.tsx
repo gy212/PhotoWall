@@ -2,11 +2,13 @@ import React, { memo, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { format } from 'date-fns';
-import { getAssetUrl, setPhotoRating, setPhotoFavorite, getRawPreview, isRawFile } from '@/services/api';
+import { getAssetUrl, setPhotoRating, setPhotoFavorite, getRawPreview, isRawFile, isPhotoEditable } from '@/services/api';
 import { useThumbnail } from '@/hooks/useThumbnail';
 import type { Photo } from '@/types';
 import { Icon } from '@/components/common/Icon';
 import { TagSelector } from '@/components/tag';
+import { PhotoEditor } from './PhotoEditor';
+import { useEditStore } from '@/stores';
 
 interface PhotoViewerProps {
   /** 当前照片 */
@@ -43,6 +45,11 @@ const PhotoViewer = memo(function PhotoViewer({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+
+  // 编辑状态
+  const { startEditing, stopEditing } = useEditStore();
 
   // 渐进式加载状态
   const [isFullLoaded, setIsFullLoaded] = useState(false);
@@ -68,6 +75,8 @@ const PhotoViewer = memo(function PhotoViewer({
     setIsFullLoaded(false);
     setLoadError(false);
     setRawPreviewUrl(null);
+    // 检查是否可编辑
+    isPhotoEditable(photo.filePath).then(setCanEdit).catch(() => setCanEdit(false));
   }, [photo]);
 
   // RAW 图像加载预览
@@ -376,6 +385,20 @@ const PhotoViewer = memo(function PhotoViewer({
               />
             </button>
 
+            {/* 编辑按钮 */}
+            {canEdit && (
+              <button
+                className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-element transition-all"
+                onClick={() => {
+                  startEditing(localPhoto);
+                  setShowEditor(true);
+                }}
+                title="编辑"
+              >
+                <Icon name="edit" className="text-xl" />
+              </button>
+            )}
+
             <button
               className={clsx(
                 'p-2 rounded-xl transition-all',
@@ -669,6 +692,22 @@ const PhotoViewer = memo(function PhotoViewer({
             </section>
           </div>
         </div>
+      )}
+
+      {/* 照片编辑器 */}
+      {showEditor && (
+        <PhotoEditor
+          photo={localPhoto}
+          open={showEditor}
+          onClose={() => {
+            stopEditing();
+            setShowEditor(false);
+          }}
+          onSave={(updatedPhoto) => {
+            setLocalPhoto(updatedPhoto);
+            onPhotoUpdate?.(updatedPhoto);
+          }}
+        />
       )}
     </div>,
     document.body
