@@ -9,8 +9,13 @@ import {
   addSyncFolder,
   removeSyncFolder,
   indexDirectories,
+  getAutoScanStatus,
+  getDirectoryScanStates,
+  startAutoScan,
+  stopAutoScan,
+  resetDirectoryScanFrequency,
 } from '@/services/api';
-import type { SyncFolder } from '@/services/api';
+import type { SyncFolder, AutoScanStatus, DirectoryScanState } from '@/services/api';
 import type { AppSettings } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Icon, IconName } from '@/components/common/Icon';
@@ -77,6 +82,8 @@ function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeSection, setActiveSection] = useState('sync');
+  const [autoScanStatus, setAutoScanStatus] = useState<AutoScanStatus | null>(null);
+  const [directoryScanStates, setDirectoryScanStates] = useState<DirectoryScanState[]>([]);
 
   // Store actions
   const {
@@ -95,6 +102,7 @@ function SettingsPage() {
   useEffect(() => {
     void loadSettings();
     void loadSyncFolders();
+    void loadAutoScanStatus();
   }, []);
 
   // Sync hue from themeColor when loaded
@@ -179,6 +187,44 @@ function SettingsPage() {
       setSyncFolders(folders);
     } catch (err) {
       console.error('加载同步文件夹失败:', err);
+    }
+  };
+
+  const loadAutoScanStatus = async () => {
+    try {
+      const [status, states] = await Promise.all([
+        getAutoScanStatus(),
+        getDirectoryScanStates(),
+      ]);
+      setAutoScanStatus(status);
+      setDirectoryScanStates(states);
+    } catch (err) {
+      console.error('加载自动扫描状态失败:', err);
+    }
+  };
+
+  const handleToggleAutoScan = async () => {
+    try {
+      if (autoScanStatus?.running) {
+        await stopAutoScan();
+        showMessage('success', '自动扫描服务已停止');
+      } else {
+        await startAutoScan();
+        showMessage('success', '自动扫描服务已启动');
+      }
+      await loadAutoScanStatus();
+    } catch (err) {
+      showMessage('error', `操作失败: ${err}`);
+    }
+  };
+
+  const handleResetScanFrequency = async (dirPath: string) => {
+    try {
+      await resetDirectoryScanFrequency(dirPath);
+      await loadAutoScanStatus();
+      showMessage('success', '扫描频率已重置');
+    } catch (err) {
+      showMessage('error', `重置失败: ${err}`);
     }
   };
 
@@ -650,6 +696,110 @@ function SettingsPage() {
                     />
                     <div className="peer h-6 w-11 rounded-full bg-button after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-outline/30 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20"></div>
                   </label>
+                </div>
+
+                {/* 自动扫描服务状态 */}
+                <div className="p-4 pl-6 border-t border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="font-medium text-primary">自动扫描服务</p>
+                      <p className="text-sm text-secondary">
+                        智能定时扫描（阶梯式频率）
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={clsx(
+                        "flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full",
+                        autoScanStatus?.running
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-secondary/20 text-secondary"
+                      )}>
+                        <span className={clsx(
+                          "w-2 h-2 rounded-full",
+                          autoScanStatus?.running ? "bg-green-400 animate-pulse" : "bg-secondary"
+                        )} />
+                        {autoScanStatus?.running ? '运行中' : '已停止'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleToggleAutoScan}
+                        className={clsx(
+                          "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                          autoScanStatus?.running
+                            ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                            : "bg-primary/20 text-primary hover:bg-primary/30"
+                        )}
+                      >
+                        {autoScanStatus?.running ? '停止' : '启动'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 实时监控开关 */}
+                  <div className="flex items-center justify-between py-3 border-t border-white/5">
+                    <div>
+                      <p className="text-sm font-medium text-primary">实时监控</p>
+                      <p className="text-xs text-secondary">监控文件变化，新增/修改/删除时立即响应</p>
+                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={settings.scan.realtimeWatch}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            scan: { ...settings.scan, realtimeWatch: e.target.checked },
+                          })
+                        }
+                        className="peer sr-only"
+                      />
+                      <div className="peer h-5 w-9 rounded-full bg-button after:absolute after:start-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-outline/30 after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20"></div>
+                    </label>
+                  </div>
+
+                  {/* 目录扫描状态列表 */}
+                  {directoryScanStates.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs text-secondary mb-2">监控目录状态</p>
+                      {directoryScanStates.map((state) => (
+                        <div
+                          key={state.dirId}
+                          className="flex items-center justify-between gap-4 p-3 rounded-lg bg-surface border border-border"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-primary truncate">{state.dirPath}</p>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-secondary">
+                              <span className="flex items-center gap-1">
+                                <Icon name="speed" className="text-sm" />
+                                x{state.scanMultiplier}
+                              </span>
+                              {state.nextScanTime && (
+                                <span className="flex items-center gap-1">
+                                  <Icon name="schedule" className="text-sm" />
+                                  {new Date(state.nextScanTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Icon name="photo_library" className="text-sm" />
+                                {state.fileCount}
+                              </span>
+                            </div>
+                          </div>
+                          {state.scanMultiplier > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetScanFrequency(state.dirPath)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs text-secondary hover:text-primary hover:bg-hover rounded transition-colors"
+                              title="重置扫描频率为 x1"
+                            >
+                              <Icon name="sync" className="text-sm" />
+                              重置
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </section>

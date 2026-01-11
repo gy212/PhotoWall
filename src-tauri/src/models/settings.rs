@@ -26,6 +26,13 @@ pub struct ScanSettings {
     pub scan_interval: u64,
     /// 是否递归扫描子文件夹
     pub recursive: bool,
+    /// 是否启用实时监控
+    #[serde(default = "default_realtime_watch")]
+    pub realtime_watch: bool,
+}
+
+fn default_realtime_watch() -> bool {
+    true
 }
 
 impl Default for ScanSettings {
@@ -40,6 +47,7 @@ impl Default for ScanSettings {
             auto_scan: false,
             scan_interval: 300, // 5分钟
             recursive: true,
+            realtime_watch: true,
         }
     }
 }

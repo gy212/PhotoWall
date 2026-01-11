@@ -71,6 +71,9 @@ use commands::{
     log_frontend,
     // edit
     apply_photo_edits, get_edit_preview, is_photo_editable,
+    // auto_scan
+    start_auto_scan, stop_auto_scan, get_auto_scan_status, get_directory_scan_states,
+    reset_directory_scan_frequency, trigger_directory_scan,
 };
 use db::Database;
 
@@ -83,6 +86,8 @@ pub struct AppState {
     pub thumbnail_limiter: Arc<Semaphore>,
     /// RAW 格式缩略图并发限制（隔离慢任务，避免堵塞普通缩略图）
     pub thumbnail_limiter_raw: Arc<Semaphore>,
+    /// 自动扫描管理器
+    pub auto_scan_manager: tokio::sync::Mutex<Option<services::AutoScanManager>>,
 }
 
 /// 获取日志目录路径
@@ -277,6 +282,13 @@ pub fn run() {
             apply_photo_edits,
             get_edit_preview,
             is_photo_editable,
+            // auto_scan
+            start_auto_scan,
+            stop_auto_scan,
+            get_auto_scan_status,
+            get_directory_scan_states,
+            reset_directory_scan_frequency,
+            trigger_directory_scan,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -392,12 +404,16 @@ pub fn run() {
             )
             .expect("无法初始化缩略图队列");
 
+            // 创建自动扫描管理器
+            let auto_scan_manager = services::AutoScanManager::with_defaults(db.clone());
+
             let app_state = AppState {
                 db: db.clone(),
                 thumbnail_service: thumbnail_service.clone(),
                 thumbnail_queue: Arc::new(thumbnail_queue),
                 thumbnail_limiter: Arc::new(Semaphore::new(thumbnail_threads)),
                 thumbnail_limiter_raw: Arc::new(Semaphore::new(1)),
+                auto_scan_manager: tokio::sync::Mutex::new(Some(auto_scan_manager)),
             };
 
             app.manage(app_state);

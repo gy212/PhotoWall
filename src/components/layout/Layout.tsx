@@ -4,6 +4,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
 import AppHeader from './AppHeader';
 import BlurredBackground from './BlurredBackground';
+import { ImportFab } from '@/components/common/ImportFab';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useShallow } from 'zustand/shallow';
 
@@ -181,6 +182,8 @@ function Layout() {
           </AnimatePresence>
         </div>
       </main>
+
+      <ImportFab />
     </div>
   );
 }

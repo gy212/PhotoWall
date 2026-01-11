@@ -1097,6 +1097,19 @@ impl Database {
         Ok(rows)
     }
 
+    /// 根据文件路径软删除照片
+    pub fn soft_delete_photo_by_path(&self, file_path: &str) -> AppResult<bool> {
+        let conn = self.connection()?;
+        let now = crate::models::photo::chrono_now_pub();
+
+        let rows = conn.execute(
+            "UPDATE photos SET is_deleted = 1, deleted_at = ?1, date_modified = ?1 WHERE file_path = ?2",
+            rusqlite::params![now, file_path],
+        )?;
+
+        Ok(rows > 0)
+    }
+
     /// 恢复照片（从回收站恢复）
     pub fn restore_photos(&self, photo_ids: &[i64]) -> AppResult<usize> {
         if photo_ids.is_empty() {

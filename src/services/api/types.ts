@@ -77,6 +77,42 @@ export interface SyncFolder {
 }
 
 /**
+ * 自动扫描状态
+ */
+export interface AutoScanStatus {
+  /** 是否正在运行 */
+  running: boolean;
+  /** 是否正在扫描 */
+  scanning: boolean;
+  /** 监控的路径列表 */
+  watchedPaths: string[];
+}
+
+/**
+ * 目录扫描状态
+ */
+export interface DirectoryScanState {
+  /** 目录 ID */
+  dirId: number;
+  /** 目录路径 */
+  dirPath: string;
+  /** 最后扫描时间 */
+  lastScan: string | null;
+  /** 是否活跃 */
+  isActive: boolean;
+  /** 最后变化时间 */
+  lastChangeTime: string | null;
+  /** 连续无变化次数 */
+  noChangeCount: number;
+  /** 扫描倍率 */
+  scanMultiplier: number;
+  /** 下次扫描时间 */
+  nextScanTime: string | null;
+  /** 文件数量 */
+  fileCount: number;
+}
+
+/**
  * 回收站统计信息
  */
 export interface TrashStats {

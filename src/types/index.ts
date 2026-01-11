@@ -315,6 +315,8 @@ export interface ScanSettings {
   scanInterval: number;
   /** 是否递归扫描子文件夹 */
   recursive: boolean;
+  /** 是否启用实时监控 */
+  realtimeWatch: boolean;
 }
 
 /**

@@ -46,6 +46,10 @@
   - [8.6 缩略图加载栈](#86-缩略图加载栈)
   - [8.7 SettingsPage.tsx（设置）](#87-settingspagetsx设置)
   - [8.8 Sidebar.tsx（备用）](#88-sidebartsx备用)
+  - [8.9 SearchPanel.tsx（搜索面板）](#89-searchpaneltsx搜索面板)
+  - [8.10 TagRibbon.tsx（快速筛选）](#810-tagribbontsx快速筛选)
+  - [8.11 BatchTagSelector.tsx（批量标签）](#811-batchtagselectortsx批量标签)
+  - [8.12 PhotoEditor.tsx（照片编辑器）](#812-photoeditortsx照片编辑器)
 - [9. 后端服务详解](#9-后端服务详解)
   - [9.1 AppState（应用状态）](#91-appstate应用状态)
   - [9.2 Scanner Service](#92-scanner-service)
@@ -57,6 +61,9 @@
   - [9.8 SettingsManager（设置落盘与事件）](#98-settingsmanager设置落盘与事件)
   - [9.9 Window Effects（原生 Acrylic）](#99-window-effects原生-acrylic)
   - [9.10 Folder Sync（当前实现的真实含义）](#910-folder-sync当前实现的真实含义)
+  - [9.11 Search（FTS5 + Filters）](#911-searchfts5--filters)
+  - [9.12 Tags（标签）](#912-tags标签)
+  - [9.13 Editor（照片编辑）](#913-editor照片编辑)
 - [10. 性能优化](#10-性能优化)
   - [10.1 数据库优化](#101-数据库优化)
   - [10.2 前端优化](#102-前端优化)
@@ -127,6 +134,7 @@ PhotoWall 是一款 Windows 桌面照片管理软件，采用 **Tauri 2.0 + Reac
 - 收藏功能、回收站（软删除）
 - 全文搜索（FTS5）
 - EXIF 元数据提取
+- 照片编辑（基础调整/旋转翻转，非 RAW）
 - RAW 格式支持（LibRaw）
 - 缩略图生成与缓存（WIC 加速）
 - 前端日志持久化
@@ -190,9 +198,25 @@ src/
 │   │   └── StatusBar.tsx   # 底部状态栏
 │   ├── sidebar/Sidebar.tsx # 侧边导航
 │   ├── photo/              # 照片组件
-│   │   ├── PhotoGrid.tsx   # 照片网格
+│   │   ├── PhotoGrid.tsx   # 照片网格（重新导出）
+│   │   ├── PhotoGrid/      # 照片网格模块
+│   │   │   ├── index.tsx   # 主组件
+│   │   │   ├── types.ts    # 类型定义
+│   │   │   ├── hooks/      # 自定义 Hooks
+│   │   │   │   ├── useGridLayout.ts      # 列数计算、行分组
+│   │   │   │   ├── useScrollSync.ts      # 嵌入模式滚动同步
+│   │   │   │   └── useThumbnailPrefetch.ts # 缩略图预取
+│   │   │   ├── components/ # 子组件
+│   │   │   │   ├── GridScroller.tsx      # 自定义 Scroller
+│   │   │   │   ├── GridFooter.tsx        # Footer 组件
+│   │   │   │   ├── GridRow.tsx           # 单行渲染
+│   │   │   │   ├── DateGroupSection.tsx  # 日期分组区块
+│   │   │   │   └── EmptyState.tsx        # 空状态
+│   │   │   └── utils/
+│   │   │       └── scrollbarMode.ts      # 滚动条模式检测
 │   │   ├── PhotoThumbnail.tsx
 │   │   ├── PhotoViewer.tsx # 全屏查看器
+│   │   ├── PhotoEditor.tsx # 照片编辑器
 │   │   ├── TimelineView.tsx
 │   │   └── FolderTree.tsx
 │   ├── album/              # 相册组件
@@ -216,7 +240,22 @@ src/
 │   ├── useScanner.ts
 │   └── useTheme.ts
 ├── services/               # 服务层
-│   ├── api.ts              # Tauri IPC 封装
+│   ├── api.ts              # Tauri IPC 封装（重新导出）
+│   ├── api/                # API 模块
+│   │   ├── index.ts        # 统一导出
+│   │   ├── types.ts        # API 接口定义
+│   │   ├── scanner.ts      # 扫描和索引
+│   │   ├── photos.ts       # 照片查询
+│   │   ├── tags.ts         # 标签管理
+│   │   ├── albums.ts       # 相册管理
+│   │   ├── utils.ts        # 工具函数
+│   │   ├── fileOps.ts      # 文件操作
+│   │   ├── settings.ts     # 设置管理
+│   │   ├── sync.ts         # 文件夹同步
+│   │   ├── trash.ts        # 回收站功能
+│   │   ├── folders.ts      # 文件夹视图
+│   │   ├── blur.ts         # 桌面模糊 + Composition Backdrop
+│   │   └── editor.ts       # 照片编辑
 │   ├── logger.ts           # 前端日志服务
 │   └── ThumbnailStore.ts   # 缩略图事件缓存
 └── types/index.ts          # 类型定义
@@ -474,7 +513,7 @@ const result = await invoke('get_photos', {
 
 - **命令名**：Rust 侧基本为 snake_case（如 `get_photos_cursor`），前端 `invoke('get_photos_cursor', ...)` 直接使用该字符串。
 - **参数/返回字段**：跨 IPC 的 struct 一般用 `#[serde(rename_all = "camelCase")]`，前端与后端对齐用 camelCase（如 `pageSize`、`photoId`、`fileHash`）。
-- **前端封装层**：`src/services/api.ts` 把命令调用包装成更符合 TS 习惯的函数名（camelCase），但本质仍是调用对应命令字符串。
+- **前端封装层**：入口 `src/services/api.ts`（re-export），实现拆分在 `src/services/api/*`（按领域拆分）。
 
 ### 6.2 主要 API 分类
 
@@ -487,6 +526,8 @@ const result = await invoke('get_photos', {
 - `get_photos(pagination, sort)` - 分页获取照片
 - `get_photos_cursor(limit, cursor, sort)` - 游标分页
 - `search_photos(filters, pagination, sort)` - 搜索照片
+- `search_photos_cursor(filters, limit, cursor, sort, includeTotal)` - 搜索照片（游标分页）
+- `search_photos_simple(query, pagination)` - 简单文本搜索
 - `get_photo(id)` - 获取单张照片
 - `get_favorite_photos()` - 获取收藏照片
 - `get_photos_by_tag(tagId)` - 按标签筛选
@@ -521,6 +562,11 @@ const result = await invoke('get_photos', {
 - `get_photos_by_folder(path, includeSubfolders)` - 获取文件夹照片
 
 
+
+#### 照片编辑
+- `is_photo_editable(filePath)` - 是否可编辑（RAW 会返回 false）
+- `apply_photo_edits(photoId, params, saveAsCopy)` - 应用编辑并保存
+- `get_edit_preview(sourcePath, params, maxSize?)` - 获取编辑预览（Base64 JPEG）
 ---
 
 ### 6.3 事件列表（前端监听）
@@ -557,8 +603,9 @@ const result = await invoke('get_photos', {
 支持的图片格式：
 - 以 `src-tauri/src/services/scanner.rs` 的 `SUPPORTED_FORMATS` 为准；当前包含：
   - 常规：jpg/jpeg/png/gif/bmp/webp/tiff/tif
-  - Apple/新格式：heic/heif
-  - RAW/相机：raw/cr2/cr3/nef/arw/dng/orf/rw2/pef/srw/raf（以及更多扩展）
+  - HEIF：heic/heif
+  - RAW：raw/cr2/cr3/nef/arw/dng/orf/rw2/pef/srw/raf
+  - 备注：缩略图 RAW 判定更宽；扫描以 `SUPPORTED_FORMATS` 为准。
 
 ### 7.2 缩略图生成
 
@@ -761,7 +808,7 @@ function Layout() {
 
 ### 7.3 虚拟滚动
 
-PhotoWall 的“海量照片不卡 UI”主要依赖 `react-virtuoso`（来源：`src/components/photo/PhotoGrid.tsx`、`src/components/photo/TimelineView.tsx`）。
+PhotoWall 的“海量照片不卡 UI”主要依赖 `react-virtuoso`（来源：`src/components/photo/PhotoGrid/index.tsx`、`src/components/photo/TimelineView.tsx`）。
 
 ```typescript
 <Virtuoso
@@ -928,7 +975,9 @@ pub fn log_frontend(level: String, message: String, context: Option<serde_json::
 
 ### 8.3 PhotoGrid.tsx（网格）
 
-来源：`src/components/photo/PhotoGrid.tsx`。
+来源：`src/components/photo/PhotoGrid/index.tsx`。
+
+入口：`src/components/photo/PhotoGrid.tsx`（re-export）。
 
 - 虚拟化：`Virtuoso` 渲染“行”，行内用 CSS Grid 摆放照片。
 - 布局：根据 `containerWidth` 动态计算列数；并用 `getAspectRatioCategory()` 给 `wide/tall` 图分配 `colSpan/rowSpan`（让超宽/超长图更不“挤”）。
@@ -974,6 +1023,38 @@ pub fn log_frontend(level: String, message: String, context: Option<serde_json::
 
 `src/components/sidebar/Sidebar.tsx` 当前不在全局 Layout 中使用；如果后续要恢复“左侧常驻导航”，需要在 `src/components/layout/Layout.tsx` 中引入，并同步调整页面布局与滚动容器的职责边界。
 
+
+### 8.9 SearchPanel.tsx（搜索面板）
+
+来源：`src/components/search/SearchPanel.tsx` + `src/stores/photoStore.ts`。
+
+- 入口：顶部 `AppHeader` 点击搜索按钮打开（另：键盘支持 `Esc` 关闭，`Ctrl/Cmd+Enter` 执行搜索）。
+- 过滤器：`query/dateFrom/dateTo/tagIds(+tagNames)/minRating/favoritesOnly`，最终写入 `photoStore.searchFilters`。
+- 标签数据：面板打开时调用 `get_all_tags` 预加载（用于多选标签过滤）。
+- 生效链路：`HomePage` 根据 `searchFilters` 是否为空，在 `get_photos_cursor` 与 `search_photos_cursor` 之间切换。
+
+### 8.10 TagRibbon.tsx（快速筛选）
+
+来源：`src/components/dashboard/TagRibbon.tsx`。
+
+- 特殊项：全部（清空过滤）、收藏（`favoritesOnly=true`）、2025 年（固定日期范围）、RAW（`fileExtensions`）。
+- 动态标签：点击某个标签会写入 `searchFilters.tagIds=[id]`，并补充 `tagNames` 供 UI 展示标题。
+
+### 8.11 BatchTagSelector.tsx（批量标签）
+
+来源：`src/components/tag/BatchTagSelector.tsx`。
+
+- 入口：`HomePage` 底部 `SelectionToolbar` 的“标签”按钮（对当前选中照片集合）。
+- 操作：批量添加/移除标签分别调用 `add_tag_to_photos/remove_tag_from_photos`；支持输入名称 `create_tag` 后立即批量添加。
+
+### 8.12 PhotoEditor.tsx（照片编辑器）
+
+来源：`src/components/photo/PhotoEditor.tsx` + `src/stores/editStore.ts`。
+
+- 交互：弹窗（Portal）内支持旋转/翻转、滑杆调整（亮度/对比度/饱和度/曝光/高光/阴影/色温/色调/锐化/模糊/暗角），并提供缩放/拖拽查看。
+- 预览：前端用 CSS filters 做实时预览；保存时用 `editStore.getEditParams()` 生成 `EditParams`。
+- 保存：调用 `apply_photo_edits(photoId, params, saveAsCopy)`；后端会更新 DB 尺寸、删除该照片缩略图缓存。
+- 限制：RAW 不可编辑（`is_photo_editable`），需要在 UI 层禁用入口/提示。
 
 ---
 
@@ -1277,6 +1358,30 @@ windows = { version = "0.62.2", features = [
 - `set_auto_sync_enabled/get_auto_sync_enabled` 只是读写 `settings.scan.auto_scan`
 - `trigger_sync_now` 只 emit `sync-started` 并返回目录数量；真正的索引仍需要前端随后调用 `index_directories(...)`
 
+
+### 9.11 Search（FTS5 + Filters）
+
+来源：`src-tauri/src/commands/search.rs` + `src-tauri/src/db/photo_dao.rs` + `src-tauri/src/models/mod.rs`。
+
+- FTS：`photos_fts MATCH ?`，并对查询加 `*` 做前缀匹配；同时对 `"` 做转义（见 `photo_dao.rs`）。
+- 过滤：日期范围（`date_taken`）、收藏（`is_favorite`）、评分区间、标签（`photo_tags` 子查询）、相册（`album_photos` 子查询）、RAW（按 `format`/扩展名列表）。
+- 分页：支持传统分页 `search_photos`，以及无限滚动用的 `search_photos_cursor`（cursor = `sortValue + photoId`）。
+
+### 9.12 Tags（标签）
+
+来源：`src-tauri/src/commands/tags.rs` + `src-tauri/src/db/tag_dao.rs`。
+
+- 模型：`tags` + 关联表 `photo_tags`；统计接口 `get_all_tags_with_count` 用于展示标签下照片数量。
+- 批量：`add_tag_to_photos/remove_tag_from_photos` 目前在命令层循环调用 DAO（可作为后续批量 SQL 的优化点）。
+
+### 9.13 Editor（照片编辑）
+
+来源：`src-tauri/src/commands/edit.rs` + `src-tauri/src/services/editor.rs`（可选：`src-tauri/src/services/native_editor.rs`）。
+
+- 入口：`apply_photo_edits/get_edit_preview/is_photo_editable`。
+- RAW 限制：`is_photo_editable` 对 RAW 扩展名返回 false（后端也会在加载时拒绝 RAW）。
+- 保存：支持覆盖原文件或生成 `_edited_N` 副本；覆盖原文件时会更新 DB 的 `width/height` 并清理该照片所有尺寸缩略图缓存。
+- 性能：若 `NativeEditor` 可用，会优先走 native 路径做部分调整；失败则回退纯 Rust 处理。
 
 ---
 
@@ -1667,6 +1772,8 @@ type ThemeMode = 'light' | 'dark' | 'system'
 功能（当前版本）：
 - 仪表盘编排：`HeroSection` + `TagRibbon` + `ContentShelf(最近添加)`
 - 照片流：`useInfiniteQuery` 拉取全部/搜索结果，并用嵌入式 `PhotoGrid` 按日期分组渲染
+- 搜索/筛选：由 `photoStore.searchFilters` 驱动；来源于 `TagRibbon`（快速筛选）与 `SearchPanel`（高级搜索）。
+- 批量标签：底部 `SelectionToolbar` -> `BatchTagSelector`，调用 `add_tag_to_photos/remove_tag_from_photos`。
 - 基础交互：单击选择、双击打开 `PhotoViewer`
 
 ### 15.2 FavoritesPage（收藏页）
@@ -1724,6 +1831,24 @@ type ThemeMode = 'light' | 'dark' | 'system'
 - 备注：标签详情页导航目前被注释（`TagsPage.tsx` 中 `navigate(...)`）
 
 
+### 15.8 SearchPanel（全局搜索）
+
+入口：`src/components/layout/AppHeader.tsx`（搜索按钮）+ `src/components/search/SearchPanel.tsx`。
+
+功能:
+- 文本搜索：写入 `photoStore.searchFilters.query`，后端走 FTS5（`search_photos_cursor`）。
+- 高级过滤：日期范围、标签（多选）、最低评分、仅收藏；清除会重置 `photoStore.searchFilters`。
+- 键盘：`Esc` 关闭，`Ctrl/Cmd + Enter` 执行搜索。
+
+### 15.9 PhotoEditor（照片编辑）
+
+入口：`src/components/photo/PhotoViewer.tsx` -> `src/components/photo/PhotoEditor.tsx`。
+
+功能:
+- 旋转/翻转 + 基础调整（亮度/对比度/饱和度/曝光/高光/阴影/色温/色调/锐化/模糊/暗角）。
+- 保存：`apply_photo_edits` 支持覆盖原文件或“另存为副本”；保存后会更新 DB 尺寸并清理该照片缩略图缓存。
+- 限制：RAW 文件不可编辑（`is_photo_editable=false`）。
+
 ---
 
 ## 16. 关键代码位置索引
@@ -1732,14 +1857,14 @@ type ThemeMode = 'light' | 'dark' | 'system'
 
 | 功能 | 文件 | 行数 |
 |------|------|------|
-| API 封装 | src/services/api.ts | 786 |
+| API 封装 | src/services/api/index.ts | 44 |
 | 类型定义 | src/types/index.ts | 408 |
 | 首页（仪表盘） | src/pages/HomePage.tsx | 223 |
 | 文件夹页 | src/pages/FoldersPage.tsx | 654 |
 | 设置页 | src/pages/SettingsPage.tsx | 633 |
 | 收藏页 | src/pages/FavoritesPage.tsx | 384 |
 | 回收站页 | src/pages/TrashPage.tsx | 557 |
-| 照片网格 | src/components/photo/PhotoGrid.tsx | 547 |
+| 照片网格 | src/components/photo/PhotoGrid/index.tsx | 346 |
 | 全屏查看器 | src/components/photo/PhotoViewer.tsx | 735 |
 | 照片缩略图 | src/components/photo/PhotoThumbnail.tsx | 244 |
 | 时间线视图 | src/components/photo/TimelineView.tsx | 233 |
@@ -1753,11 +1878,14 @@ type ThemeMode = 'light' | 'dark' | 'system'
 | 工具栏 | src/components/layout/Toolbar.tsx | 199 |
 | 状态栏 | src/components/layout/StatusBar.tsx | 53 |
 | Dashboard - Hero | src/components/dashboard/HeroSection.tsx | 99 |
-| Dashboard - TagRibbon | src/components/dashboard/TagRibbon.tsx | 38 |
+| Dashboard - TagRibbon | src/components/dashboard/TagRibbon.tsx | 115 |
 | Dashboard - ContentShelf | src/components/dashboard/ContentShelf.tsx | 146 |
 | 相册管理 | src/components/album/AlbumManager.tsx | 266 |
 | 标签管理 | src/components/tag/TagManager.tsx | 290 |
-| 标签选择器 | src/components/tag/TagSelector.tsx | 218 |
+| 标签选择器 | src/components/tag/TagSelector.tsx | 215 |
+| 批量标签 | src/components/tag/BatchTagSelector.tsx | 201 |
+| 搜索面板 | src/components/search/SearchPanel.tsx | 256 |
+| 照片编辑器 | src/components/photo/PhotoEditor.tsx | 426 |
 | 右键菜单 | src/components/common/ContextMenu.tsx | 145 |
 | 确认对话框 | src/components/common/ConfirmDialog.tsx | 106 |
 | 扫描进度 | src/components/common/ScanProgressDialog.tsx | 97 |
@@ -1780,6 +1908,8 @@ type ThemeMode = 'light' | 'dark' | 'system'
 | 缩略图队列 | src-tauri/src/services/thumbnail_queue.rs | 341 |
 | 应用入口 | src-tauri/src/lib.rs | 335 |
 | 搜索命令 | src-tauri/src/commands/search.rs | 280 |
+| 编辑命令 | src-tauri/src/commands/edit.rs | 225 |
+| 编辑服务 | src-tauri/src/services/editor.rs | 620 |
 | 元数据提取 | src-tauri/src/services/metadata.rs | 272 |
 | 文件监控 | src-tauri/src/services/watcher.rs | 263 |
 | Photo 模型 | src-tauri/src/models/photo.rs | 236 |
@@ -1808,6 +1938,7 @@ type ThemeMode = 'light' | 'dark' | 'system'
 | navigationStore | src/stores/navigationStore.ts | 75 | 导航状态管理 |
 | photoStore | src/stores/photoStore.ts | 69 | 照片列表状态 |
 | selectionStore | src/stores/selectionStore.ts | 68 | 选择状态管理 |
+| editStore | src/stores/editStore.ts | 153 | 照片编辑状态管理 |
 
 ---
 
@@ -1863,7 +1994,7 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 3. **缩略图“有时不显示/很慢”**：先看 `thumbnail-ready` 是否触发（前端是否监听成功），再看磁盘缓存是否写入；大量滚动时会暂停新请求属于预期行为。
 4. **日志文件缺失**：当前日志路径是 `{current_dir}\\logs`，打包后可能不可写；先检查写权限或改为 `app_data_dir`（代码层面）。
 5. **设置保存后丢字段**：前端 TS 类型未暴露的字段（如 `librawEnabled`）保存时会回到默认；需要同步扩展 TS 类型与 SettingsPage。
-6. **扫描相关 API/Hook 历史遗留**：`scan_directory/scan_directories` 后端返回 `ScanResult`，但 `src/services/api.ts` 里 `scanDirectory/scanDirectories` 仍标成 `Promise<Photo[]>`；同时 `src/hooks/useScanner.ts` 监听的 `scan-progress/index_photos/cancel_scan` 在后端不存在。
+6. **扫描相关 API/Hook 历史遗留**：`scan_directory/scan_directories` 后端返回 `ScanResult`，但 `src/services/api/scanner.ts` 里 `scanDirectory/scanDirectories` 仍标成 `Promise<Photo[]>`；同时 `src/hooks/useScanner.ts` 监听的 `scan-progress/index_photos/cancel_scan` 在后端不存在。
 
 #### 排障流程（建议从上到下）
 
@@ -1899,6 +2030,7 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 - search_photos, search_photos_cursor, search_photos_simple
 - get_favorite_photos, get_photos_by_tag, get_photos_by_album
 - get_camera_models, get_lens_models, get_photo_stats
+- get_recently_edited_photo
 
 ### 照片操作
 - set_photo_rating, set_photo_favorite, set_photos_favorite
@@ -1907,6 +2039,7 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 - create_tag, get_tag, get_tag_by_name, update_tag, delete_tag
 - get_all_tags, get_all_tags_with_count
 - add_tag_to_photo, add_tags_to_photo, remove_tag_from_photo
+- remove_all_tags_from_photo
 - get_tags_for_photo, get_or_create_tag
 - add_tag_to_photos, remove_tag_from_photos
 
@@ -1914,8 +2047,10 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 - create_album, get_album, get_album_by_name, update_album, delete_album
 - get_all_albums, get_all_albums_with_count
 - add_photo_to_album, add_photos_to_album, remove_photo_from_album
+- remove_photos_from_album, remove_all_photos_from_album
 - get_photo_ids_in_album, get_albums_for_photo
 - set_album_cover, reorder_album_photos
+- get_recently_edited_album
 
 ### 文件操作
 - import_photos, export_photos, delete_photos
@@ -1937,6 +2072,15 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 ### 设置
 - get_settings, save_settings, reset_settings
 
+### 窗口特效（Window Effects）
+- apply_window_settings
+- clear_blur_cache, set_exclude_from_capture, get_blurred_desktop
+- is_composition_blur_supported, enable_composition_blur, disable_composition_blur
+- set_composition_blur_radius, set_composition_tint
+
+### 照片编辑
+- is_photo_editable, get_edit_preview, apply_photo_edits
+
 ### 同步
 - get_sync_folders, add_sync_folder, remove_sync_folder
 - set_auto_sync_enabled, get_auto_sync_enabled
@@ -1945,16 +2089,19 @@ LibRaw DLL 会被打包到安装目录的 `libraw/` 文件夹。
 ### 日志
 - log_frontend
 
+### Other
+- greet
+
 ### 16.4 代码统计
 
 | 类别 | 文件数 | 总行数 |
 |------|--------|--------|
-| 前端 TypeScript/TSX | 63 | 10,541 |
-| 后端 Rust | 40 | 10,805 |
-| CSS | 2 | 532 |
-| **总计** | **105** | **21,878** |
+| 前端 TypeScript/TSX | 75 | 13,946 |
+| 后端 Rust | 44 | 12,527 |
+| CSS | 2 | 487 |
+| **总计** | **121** | **26,960** |
 
 ---
 
-*文档更新时间: 2025-12-26*
+*文档更新时间: 2026-01-10*
 *PhotoWall v0.1.0*

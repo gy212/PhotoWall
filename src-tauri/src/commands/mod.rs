@@ -15,6 +15,7 @@ pub mod folders;
 pub mod logging;
 pub mod window_effects;
 pub mod edit;
+pub mod auto_scan;
 
 pub use greet::*;
 pub use scanner::*;
@@ -29,3 +30,4 @@ pub use folders::*;
 pub use logging::*;
 pub use window_effects::*;
 pub use edit::*;
+pub use auto_scan::*;

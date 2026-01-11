@@ -444,6 +444,18 @@ impl PhotoIndexer {
             year, month, day, hours, minutes, seconds
         )
     }
+
+    /// 索引单个文件（用于实时监控）
+    pub fn index_single_file(&self, path: &Path) -> AppResult<bool> {
+        match self.process_single_file(path) {
+            Ok(Some(photo)) => {
+                self.db.create_photo(&photo)?;
+                Ok(true)
+            }
+            Ok(None) => Ok(false), // 跳过（已存在或重复）
+            Err(e) => Err(e),
+        }
+    }
 }
 
 #[cfg(test)]

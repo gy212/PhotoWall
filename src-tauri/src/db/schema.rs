@@ -3,7 +3,7 @@
 //! 包含所有表的 CREATE 语句和迁移脚本
 
 /// 数据库版本
-pub const SCHEMA_VERSION: i32 = 3;
+pub const SCHEMA_VERSION: i32 = 4;
 
 /// 初始化 Schema SQL
 pub const INIT_SCHEMA: &str = r#"
@@ -161,6 +161,18 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: r#"
             CREATE INDEX IF NOT EXISTS idx_photos_file_path ON photos(file_path);
             CREATE INDEX IF NOT EXISTS idx_photo_tags_composite ON photo_tags(photo_id, tag_id);
+        "#,
+    },
+    Migration {
+        version: 4,
+        description: "Extend scan_directories table for stepped scan frequency",
+        sql: r#"
+            ALTER TABLE scan_directories ADD COLUMN last_change_time TEXT;
+            ALTER TABLE scan_directories ADD COLUMN no_change_count INTEGER DEFAULT 0;
+            ALTER TABLE scan_directories ADD COLUMN scan_multiplier INTEGER DEFAULT 1;
+            ALTER TABLE scan_directories ADD COLUMN next_scan_time TEXT;
+            ALTER TABLE scan_directories ADD COLUMN file_count INTEGER DEFAULT 0;
+            CREATE INDEX IF NOT EXISTS idx_scan_directories_next_scan ON scan_directories(next_scan_time);
         "#,
     },
 ];
