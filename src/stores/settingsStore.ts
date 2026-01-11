@@ -35,6 +35,9 @@ interface SettingsState {
   compositionBlurSupported: boolean;
   compositionBlurEnabled: boolean;
 
+  /** 高刷/流畅优先模式（减少重特效，提升帧率稳定性） */
+  highRefreshUi: boolean;
+
   // Actions
   setLanguage: (language: 'zh-CN' | 'en-US') => void;
   addWatchedFolder: (path: string) => void;
@@ -52,6 +55,7 @@ interface SettingsState {
   setCustomBlurEnabled: (enabled: boolean) => void;
   setCompositionBlurSupported: (supported: boolean) => void;
   setCompositionBlurEnabled: (enabled: boolean) => void;
+  setHighRefreshUi: (enabled: boolean) => void;
   resetToDefaults: () => void;
 }
 
@@ -71,6 +75,7 @@ const defaultSettings = {
   customBlurEnabled: false,
   compositionBlurSupported: false,
   compositionBlurEnabled: false,
+  highRefreshUi: true,
 };
 
 export const useSettingsStore = create<SettingsState>()(persist(
@@ -152,6 +157,8 @@ export const useSettingsStore = create<SettingsState>()(persist(
           ? state
           : { compositionBlurEnabled }
       ),
+    setHighRefreshUi: (highRefreshUi) =>
+      set((state) => (state.highRefreshUi === highRefreshUi ? state : { highRefreshUi })),
 
     resetToDefaults: () => set(defaultSettings),
   }),

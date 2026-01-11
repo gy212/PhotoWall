@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
 import AppHeader from './AppHeader';
@@ -7,6 +7,14 @@ import BlurredBackground from './BlurredBackground';
 import { ImportFab } from '@/components/common/ImportFab';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useShallow } from 'zustand/shallow';
+
+const HomePage = lazy(() => import('@/pages/HomePage'));
+const AlbumsPage = lazy(() => import('@/pages/AlbumsPage'));
+const TagsPage = lazy(() => import('@/pages/TagsPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+const FavoritesPage = lazy(() => import('@/pages/FavoritesPage'));
+const TrashPage = lazy(() => import('@/pages/TrashPage'));
+const FoldersPage = lazy(() => import('@/pages/FoldersPage'));
 
 // 页面顺序，用于判断滑动方向
 const PAGE_ORDER = ['/', '/albums', '/tags', '/folders', '/favorites', '/trash', '/settings'];
@@ -105,14 +113,31 @@ function Layout() {
   }, []);
 
   // 从 Store 获取外观设置
-  const { windowOpacity, windowTransparency, blurRadius, customBlurEnabled } = useSettingsStore(
+  const { windowOpacity, windowTransparency, blurRadius, customBlurEnabled, highRefreshUi } = useSettingsStore(
     useShallow((state) => ({
       windowOpacity: state.windowOpacity,
       windowTransparency: state.windowTransparency,
       blurRadius: state.blurRadius,
       customBlurEnabled: state.customBlurEnabled,
+      highRefreshUi: state.highRefreshUi,
     }))
   );
+
+  const pageTransition = useMemo(
+    () => ({
+      type: 'tween' as const,
+      duration: highRefreshUi ? 0.2 : 0.22,
+      ease: [0.22, 1, 0.36, 1] as const,
+    }),
+    [highRefreshUi]
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('high-refresh', highRefreshUi);
+    return () => {
+      document.documentElement.classList.remove('high-refresh');
+    };
+  }, [highRefreshUi]);
 
   // 同步玻璃拟态 CSS 变量（影响 glass-panel / native-glass-panel 等）
   useLayoutEffect(() => {
@@ -174,10 +199,21 @@ function Layout() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-              className="h-full w-full absolute inset-0 bg-background"
+              transition={pageTransition}
+              className="h-full w-full absolute inset-0 bg-background will-change-transform transform-gpu"
             >
-              <Outlet />
+              <Suspense fallback={<div className="h-full w-full bg-background" />}>
+                <Routes location={location}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/albums" element={<AlbumsPage />} />
+                  <Route path="/tags" element={<TagsPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/favorites" element={<FavoritesPage />} />
+                  <Route path="/trash" element={<TrashPage />} />
+                  <Route path="/folders" element={<FoldersPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </div>

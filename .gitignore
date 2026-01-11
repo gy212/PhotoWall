@@ -53,6 +53,7 @@ src/PhotoWall.Imaging/
 .idea/
 .qoder/
 .claude/
+.gemini/
 .DS_Store
 LibRaw-0.21.4
 *.suo
@@ -84,6 +85,7 @@ PhotoWallData/
 *.tmp
 *.temp
 nul
+temp_stats.txt
 
 # Reference/Design files (not essential)
 临时图片/

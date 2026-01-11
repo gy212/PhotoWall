@@ -195,14 +195,28 @@ export default function HomePage() {
     setViewerOpen(false);
   }, []);
 
+  const homeDebugEnabled =
+    import.meta.env.DEV &&
+    (import.meta.env as unknown as Record<string, string | boolean | undefined>).VITE_DEBUG_HOME === '1';
+
   // 调试信息（生产环境可移除）
   useEffect(() => {
+    if (!homeDebugEnabled) return;
     console.log('[HomePage] isTauriRuntime:', isTauriRuntime);
     console.log('[HomePage] feedLoading:', feedLoading, 'feedError:', feedError);
     console.log('[HomePage] recentLoading:', recentLoading, 'recentError:', recentError);
     console.log('[HomePage] photos count:', photos.length);
     console.log('[HomePage] recentPhotos count:', recentPhotos.length);
-  }, [isTauriRuntime, feedLoading, feedError, recentLoading, recentError, photos.length, recentPhotos.length]);
+  }, [
+    homeDebugEnabled,
+    isTauriRuntime,
+    feedLoading,
+    feedError,
+    recentLoading,
+    recentError,
+    photos.length,
+    recentPhotos.length,
+  ]);
 
   // --- Selection Actions ---
   const queryClient = useQueryClient();

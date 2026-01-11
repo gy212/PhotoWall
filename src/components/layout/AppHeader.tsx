@@ -19,22 +19,31 @@ export default function AppHeader() {
     { to: '/settings', label: '设置', icon: 'settings' },
   ];
 
+  const preloadByPath: Partial<Record<string, () => Promise<unknown>>> = {
+    '/': () => import('@/pages/HomePage'),
+    '/folders': () => import('@/pages/FoldersPage'),
+    '/trash': () => import('@/pages/TrashPage'),
+    '/settings': () => import('@/pages/SettingsPage'),
+  };
+
   useEffect(() => {
-    const activeIndex = navItems.findIndex(item =>
-      item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)
-    );
+    requestAnimationFrame(() => {
+      const activeIndex = navItems.findIndex(item =>
+        item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)
+      );
 
-    if (activeIndex !== -1 && itemsRef.current[activeIndex] && navRef.current) {
-      const activeEl = itemsRef.current[activeIndex];
-      const navRect = navRef.current.getBoundingClientRect();
-      const itemRect = activeEl.getBoundingClientRect();
+      if (activeIndex !== -1 && itemsRef.current[activeIndex] && navRef.current) {
+        const activeEl = itemsRef.current[activeIndex];
+        const navRect = navRef.current.getBoundingClientRect();
+        const itemRect = activeEl.getBoundingClientRect();
 
-      setPillStyle({
-        left: itemRect.left - navRect.left,
-        width: itemRect.width,
-        opacity: 1
-      });
-    }
+        setPillStyle({
+          left: itemRect.left - navRect.left,
+          width: itemRect.width,
+          opacity: 1
+        });
+      }
+    });
   }, [location.pathname]);
 
   return (
@@ -73,6 +82,8 @@ export default function AppHeader() {
             ref={(el) => {
               itemsRef.current[index] = el;
             }}
+            onPointerEnter={() => void preloadByPath[item.to]?.()}
+            onFocus={() => void preloadByPath[item.to]?.()}
             className={({ isActive }) =>
               clsx(
                 'relative z-10 px-5 py-1.5 rounded-full text-sm font-semibold transition-colors duration-150 flex items-center gap-2',

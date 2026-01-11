@@ -91,6 +91,8 @@ function SettingsPage() {
     setThemeColor,
     theme,
     setTheme,
+    highRefreshUi,
+    setHighRefreshUi,
   } = useSettingsStore();
 
   // Local Hue State
@@ -863,6 +865,32 @@ function SettingsPage() {
               <h3 className="text-lg font-semibold text-primary">性能</h3>
               <p className="text-sm text-secondary mb-6">调整设置以优化应用程序的速度和资源使用。</p>
               <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="min-w-0">
+                    <label className="font-medium text-primary">高刷模式 (120Hz)</label>
+                    <p className="text-sm text-secondary mt-1">
+                      减少重特效，优先保证滚动与切换的帧率稳定。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHighRefreshUi(!highRefreshUi)}
+                    className={clsx(
+                      'relative h-7 w-12 rounded-full border transition-colors',
+                      highRefreshUi ? 'bg-primary border-primary' : 'bg-element border-border'
+                    )}
+                    aria-pressed={highRefreshUi}
+                    aria-label="高刷模式"
+                  >
+                    <span
+                      className={clsx(
+                        'absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform',
+                        highRefreshUi && 'translate-x-5'
+                      )}
+                    />
+                  </button>
+                </div>
+
                 <div>
                   <div className="flex items-baseline justify-between">
                     <label className="font-medium text-primary">扫描线程数</label>

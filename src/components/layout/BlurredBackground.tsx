@@ -52,6 +52,7 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
     customBlurEnabled,
     compositionBlurSupported,
     compositionBlurEnabled,
+    highRefreshUi,
     setCompositionBlurSupported,
     setCompositionBlurEnabled,
   } = useSettingsStore(
@@ -60,6 +61,7 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
       customBlurEnabled: state.customBlurEnabled,
       compositionBlurSupported: state.compositionBlurSupported,
       compositionBlurEnabled: state.compositionBlurEnabled,
+      highRefreshUi: state.highRefreshUi,
       setCompositionBlurSupported: state.setCompositionBlurSupported,
       setCompositionBlurEnabled: state.setCompositionBlurEnabled,
     }))
@@ -160,7 +162,7 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
       if (!tauri || !enabled || !customBlurEnabled || compositionBlurEnabled) return;
 
       const now = Date.now();
-      const minIntervalMs = mode === 'preview' ? 120 : 0;
+      const minIntervalMs = mode === 'preview' ? (highRefreshUi ? 240 : 120) : 0;
       if (!force && minIntervalMs > 0 && now - lastUpdateRef.current < minIntervalMs) return;
       lastUpdateRef.current = now;
 
@@ -173,7 +175,9 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
       try {
         await setExcludeFromCapture(true);
 
-        const scaleFactor = mode === 'preview' ? 0.2 : getDesktopCaptureScaleFactor(blurRadius);
+        const scaleFactor = mode === 'preview'
+          ? (highRefreshUi ? 0.15 : 0.2)
+          : getDesktopCaptureScaleFactor(blurRadius);
         const image = await getBlurredDesktop(blurRadius, scaleFactor);
         setBackgroundImage(image);
       } catch (err) {
@@ -189,7 +193,7 @@ function BlurredBackground({ enabled = true }: BlurredBackgroundProps) {
         }
       }
     },
-    [tauri, enabled, customBlurEnabled, compositionBlurEnabled, blurRadius]
+    [tauri, enabled, customBlurEnabled, compositionBlurEnabled, blurRadius, highRefreshUi]
   );
 
   // 监听窗口事件 (Fallback 模式)
