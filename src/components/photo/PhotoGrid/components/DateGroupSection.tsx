@@ -43,7 +43,7 @@ export const DateGroupSection = memo(function DateGroupSection({
       ref={(el) => onRegisterElement(group.date, el)}
     >
       {/* 日期分组 Header - Solid Background */}
-      <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface border-b border-border">
+      <div className="sticky top-0 z-20 mb-4 px-4 py-3 bg-surface border-2 border-black/30 dark:border-white/20 rounded-lg">
         <div className="flex items-baseline justify-between">
           <div className="flex items-baseline gap-3">
             <h3 className="text-2xl font-bold tracking-tight text-primary font-serif">

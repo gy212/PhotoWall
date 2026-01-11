@@ -17,6 +17,7 @@ import { Icon } from '@/components/common/Icon';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getPhotosCursor, searchPhotosCursor, setPhotosFavorite, softDeletePhotos } from '@/services/api';
 import type { Photo, PhotoCursor, SortField } from '@/types';
+import { Link } from 'react-router-dom';
 
 const PAGE_SIZE = 100;
 const RECENT_PHOTOS_LIMIT = 20;
@@ -277,6 +278,14 @@ export default function HomePage() {
       ref={scrollContainerRef}
       className="h-full overflow-y-auto p-6 space-y-8 relative"
     >
+      {/* 临时入口：笔记本风格预览 */}
+      <Link
+        to="/notebook-demo"
+        className="fixed top-20 right-6 z-50 px-3 py-1.5 bg-amber-500 text-white text-sm rounded-lg shadow-lg hover:bg-amber-600 transition-colors"
+      >
+        📓 笔记本风格预览
+      </Link>
+
       {/* 仪表盘区域 */}
       <HeroSection />
 
@@ -309,7 +318,7 @@ export default function HomePage() {
         )}
 
         {!feedError && (
-          <div className="w-full card rounded-2xl overflow-hidden p-4 border border-border">
+          <div className="w-full card card-grid-bottom rounded-2xl overflow-hidden p-4 border border-border">
             <PhotoGrid
               photos={photos}
               loading={loading}
