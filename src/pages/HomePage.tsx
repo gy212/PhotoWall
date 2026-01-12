@@ -278,7 +278,7 @@ export default function HomePage() {
       className="h-full overflow-y-auto p-6 space-y-8 relative"
     >
       {/* 仪表盘区域 */}
-      <HeroSection />
+      <HeroSection onPhotoClick={handleShelfPhotoClick} />
 
       <TagRibbon />
 

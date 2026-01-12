@@ -6,6 +6,10 @@ import type { Photo } from '@/types';
 
 import { Icon } from '@/components/common/Icon';
 
+interface HeroSectionProps {
+    onPhotoClick?: (photo: Photo) => void;
+}
+
 /** 格式化相对时间 */
 function formatRelativeTime(dateStr: string): string {
     const date = new Date(dateStr);
@@ -22,7 +26,19 @@ function formatRelativeTime(dateStr: string): string {
     return date.toLocaleDateString('zh-CN');
 }
 
-export default function HeroSection() {
+/** 格式化文件大小 */
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** 获取文件格式 */
+function getFileFormat(fileName: string): string {
+    return fileName.split('.').pop()?.toUpperCase() || '';
+}
+
+export default function HeroSection({ onPhotoClick }: HeroSectionProps) {
     const navigate = useNavigate();
 
     // 获取收藏照片
@@ -81,9 +97,54 @@ export default function HeroSection() {
                             <h2 className="text-3xl font-bold text-white mb-1 font-serif tracking-tight">
                                 {featuredPhoto.fileName}
                             </h2>
-                            <p className="text-white/60 text-sm font-medium">
+                            <p className="text-white/60 text-sm font-medium mb-4">
                                 {favoritesData?.total ?? 0} 张收藏照片
                             </p>
+                            {/* 照片信息：优先显示拍摄参数，否则显示基本信息 */}
+                            <div className="relative pt-4 border-t border-white/20">
+                                <div className="absolute inset-0 -bottom-8 -left-8 -right-8 backdrop-blur-md -z-10" />
+                                <div className="flex items-center gap-6">
+                                {featuredPhoto.aperture || featuredPhoto.shutterSpeed || featuredPhoto.iso ? (
+                                    <>
+                                        {featuredPhoto.aperture && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">光圈</span>
+                                                <span className="text-white text-lg font-semibold">f/{featuredPhoto.aperture}</span>
+                                            </div>
+                                        )}
+                                        {featuredPhoto.shutterSpeed && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">快门</span>
+                                                <span className="text-white text-lg font-semibold">{featuredPhoto.shutterSpeed}</span>
+                                            </div>
+                                        )}
+                                        {featuredPhoto.iso && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">ISO</span>
+                                                <span className="text-white text-lg font-semibold">{featuredPhoto.iso}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {featuredPhoto.width && featuredPhoto.height && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">分辨率</span>
+                                                <span className="text-white text-lg font-semibold">{featuredPhoto.width} × {featuredPhoto.height}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col">
+                                            <span className="text-white/50 text-xs uppercase tracking-wider">大小</span>
+                                            <span className="text-white text-lg font-semibold">{formatFileSize(featuredPhoto.fileSize)}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-white/50 text-xs uppercase tracking-wider">格式</span>
+                                            <span className="text-white text-lg font-semibold">{getFileFormat(featuredPhoto.fileName)}</span>
+                                        </div>
+                                    </>
+                                )}
+                                </div>
+                            </div>
                         </div>
                     </>
                 ) : (
@@ -104,7 +165,7 @@ export default function HeroSection() {
 
             {/* 右侧：最近编辑的照片 */}
             <div
-                onClick={() => navigate('/')}
+                onClick={() => recentPhoto && onPhotoClick?.(recentPhoto)}
                 className="col-span-4 card rounded-3xl relative overflow-hidden group cursor-pointer flex flex-col border border-border bg-surface transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:-translate-y-1"
             >
                 {recentPhoto ? (
@@ -125,9 +186,50 @@ export default function HeroSection() {
                             <h3 className="text-xl font-bold text-white mb-1 font-serif truncate">
                                 {recentPhoto.fileName}
                             </h3>
-                            <p className="text-white/60 text-sm">
+                            <p className="text-white/60 text-sm mb-3">
                                 {recentPhoto.dateModified ? formatRelativeTime(recentPhoto.dateModified) : ''}
                             </p>
+                            {/* 照片信息：优先显示拍摄参数，否则显示基本信息 */}
+                            <div className="relative pt-3 border-t border-white/20">
+                                <div className="absolute inset-0 -bottom-6 -left-6 -right-6 backdrop-blur-md -z-10" />
+                                <div className="flex items-center gap-4">
+                                {recentPhoto.aperture || recentPhoto.shutterSpeed || recentPhoto.iso ? (
+                                    <>
+                                        {recentPhoto.aperture && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">光圈</span>
+                                                <span className="text-white text-base font-semibold">f/{recentPhoto.aperture}</span>
+                                            </div>
+                                        )}
+                                        {recentPhoto.shutterSpeed && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">快门</span>
+                                                <span className="text-white text-base font-semibold">{recentPhoto.shutterSpeed}</span>
+                                            </div>
+                                        )}
+                                        {recentPhoto.iso && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">ISO</span>
+                                                <span className="text-white text-base font-semibold">{recentPhoto.iso}</span>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {recentPhoto.width && recentPhoto.height && (
+                                            <div className="flex flex-col">
+                                                <span className="text-white/50 text-xs uppercase tracking-wider">分辨率</span>
+                                                <span className="text-white text-base font-semibold">{recentPhoto.width} × {recentPhoto.height}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col">
+                                            <span className="text-white/50 text-xs uppercase tracking-wider">大小</span>
+                                            <span className="text-white text-base font-semibold">{formatFileSize(recentPhoto.fileSize)}</span>
+                                        </div>
+                                    </>
+                                )}
+                                </div>
+                            </div>
                         </div>
                     </>
                 ) : (
