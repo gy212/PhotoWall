@@ -27,8 +27,9 @@ export function useAutoScanEvents() {
 
     const setup = async () => {
       const next: UnlistenFn[] = await Promise.all([
-        listen('auto-scan:file-changed', scheduleRefresh),
         listen('auto-scan:completed', scheduleRefresh),
+        listen('auto-scan:realtime-indexed', scheduleRefresh),
+        listen('auto-scan:realtime-deleted', scheduleRefresh),
       ]);
 
       if (cancelled) {
@@ -51,4 +52,3 @@ export function useAutoScanEvents() {
     };
   }, [queryClient]);
 }
-

@@ -86,6 +86,8 @@ pub async fn get_auto_scan_status(
             running: false,
             scanning: false,
             watched_paths: vec![],
+            realtime_watch: false,
+            active_watch_paths: vec![],
         }),
     }
 }

@@ -86,6 +86,10 @@ export interface AutoScanStatus {
   scanning: boolean;
   /** 监控的路径列表 */
   watchedPaths: string[];
+  /** 是否启用实时监控 */
+  realtimeWatch: boolean;
+  /** 实际正在监控的路径列表（实时监控关闭时可能为空） */
+  activeWatchPaths: string[];
 }
 
 /**

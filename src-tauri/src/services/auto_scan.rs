@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -45,6 +45,8 @@ pub struct AutoScanStatus {
     pub running: bool,
     pub scanning: bool,
     pub watched_paths: Vec<String>,
+    pub realtime_watch: bool,
+    pub active_watch_paths: Vec<String>,
 }
 
 /// 扫描事件 payload
@@ -74,6 +76,12 @@ pub struct FileChangedPayload {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RealtimeIndexedPayload {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FrequencyChangedPayload {
     pub dir_path: String,
     pub old_multiplier: i32,
@@ -84,6 +92,12 @@ pub struct FrequencyChangedPayload {
 enum ScanEvent {
     FileChanged(FileChangeEvent),
     ScheduledScan(String),
+}
+
+#[derive(Debug, Clone)]
+struct RealtimeJob {
+    dir_path: String,
+    file_path: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,6 +123,9 @@ pub struct AutoScanManager {
     runtime_config: Option<AutoScanRuntimeConfig>,
     event_loop_handle: Option<JoinHandle<()>>,
     scheduler_handle: Option<JoinHandle<()>>,
+    realtime_tx: Option<mpsc::Sender<RealtimeJob>>,
+    realtime_handle: Option<JoinHandle<()>>,
+    generation: Arc<AtomicU64>,
 }
 
 impl AutoScanManager {
@@ -129,6 +146,9 @@ impl AutoScanManager {
             runtime_config: None,
             event_loop_handle: None,
             scheduler_handle: None,
+            realtime_tx: None,
+            realtime_handle: None,
+            generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -162,6 +182,95 @@ impl AutoScanManager {
             index_options,
             realtime_watch: settings.scan.realtime_watch,
         }
+    }
+
+    fn spawn_realtime_worker(
+        db: Arc<Database>,
+        scanning: Arc<AtomicBool>,
+        running: Arc<AtomicBool>,
+        generation_shared: Arc<AtomicU64>,
+        generation: u64,
+        index_options: IndexOptions,
+        app: AppHandle,
+        mut rx: mpsc::Receiver<RealtimeJob>,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut pending: HashSet<String> = HashSet::new();
+
+            while let Some(job) = rx.recv().await {
+                if !running.load(Ordering::SeqCst) || generation_shared.load(Ordering::SeqCst) != generation {
+                    break;
+                }
+
+                let key = job.file_path.display().to_string();
+                if pending.contains(&key) {
+                    continue;
+                }
+                pending.insert(key.clone());
+
+                tokio::time::sleep(Duration::from_millis(800)).await;
+
+                if !running.load(Ordering::SeqCst) || generation_shared.load(Ordering::SeqCst) != generation {
+                    pending.remove(&key);
+                    break;
+                }
+
+                // Wait for the scan lock (avoid overlap with scheduled scans).
+                loop {
+                    if !running.load(Ordering::SeqCst) || generation_shared.load(Ordering::SeqCst) != generation {
+                        pending.remove(&key);
+                        return;
+                    }
+                    if !scanning.swap(true, Ordering::SeqCst) {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+
+                // Index in a blocking task (DB + image parsing).
+                let mut indexed_any = false;
+                for attempt in 0..3 {
+                    if !running.load(Ordering::SeqCst) || generation_shared.load(Ordering::SeqCst) != generation {
+                        break;
+                    }
+
+                    let db_for_task = db.clone();
+                    let index_options_for_task = index_options.clone();
+                    let file_path_for_task = job.file_path.clone();
+
+                    let result = tokio::task::spawn_blocking(move || {
+                        let indexer = PhotoIndexer::new(db_for_task, index_options_for_task);
+                        indexer.index_single_file(file_path_for_task.as_path())
+                    })
+                    .await;
+
+                    match result {
+                        Ok(Ok(indexed)) => {
+                            indexed_any = indexed;
+                            break;
+                        }
+                        Ok(Err(_e)) => {
+                            tokio::time::sleep(Duration::from_millis(400 * (attempt + 1) as u64)).await;
+                        }
+                        Err(_e) => break,
+                    }
+                }
+
+                if indexed_any
+                    && running.load(Ordering::SeqCst)
+                    && generation_shared.load(Ordering::SeqCst) == generation
+                {
+                    let _ = db.reset_scan_frequency(&job.dir_path);
+                    let _ = app.emit(
+                        "auto-scan:realtime-indexed",
+                        RealtimeIndexedPayload { path: key.clone() },
+                    );
+                }
+
+                scanning.store(false, Ordering::SeqCst);
+                pending.remove(&key);
+            }
+        })
     }
 
     pub async fn apply_settings(&mut self, app: AppHandle, settings: &AppSettings) -> AppResult<()> {
@@ -222,6 +331,7 @@ impl AutoScanManager {
         });
 
         self.running.store(true, Ordering::SeqCst);
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
 
         // 创建新的事件通道
         let (event_tx, event_rx) = mpsc::channel::<ScanEvent>(100);
@@ -235,11 +345,26 @@ impl AutoScanManager {
 
         self.sync_active_scan_directories(&watched_folders)?;
 
+        // Realtime indexing worker (bounded + dedup).
+        let (realtime_tx, realtime_rx) = mpsc::channel::<RealtimeJob>(256);
+        self.realtime_tx = Some(realtime_tx);
+        let realtime_handle = Self::spawn_realtime_worker(
+            self.db.clone(),
+            self.scanning.clone(),
+            self.running.clone(),
+            self.generation.clone(),
+            generation,
+            self.index_options.clone(),
+            app.clone(),
+            realtime_rx,
+        );
+        self.realtime_handle = Some(realtime_handle);
+
         // 启动文件监控
         if realtime_watch {
-        for folder in &watched_folders {
-            if let Err(e) = self.add_watch_path_internal(folder, event_tx.clone()) {
-                tracing::error!("无法监控文件夹 {}: {}", folder, e);
+            for folder in &watched_folders {
+                if let Err(e) = self.add_watch_path_internal(folder, event_tx.clone()) {
+                    tracing::error!("无法监控文件夹 {}: {}", folder, e);
             }
         }
         }
@@ -256,6 +381,9 @@ impl AutoScanManager {
         let running = self.running.clone();
         let scanning = self.scanning.clone();
         let app_clone = app.clone();
+        let realtime_tx = self.realtime_tx.clone();
+        let generation_shared = self.generation.clone();
+        let generation_for_loop = generation;
 
         self.event_loop_handle = Some(tokio::spawn(async move {
             Self::event_loop(
@@ -264,6 +392,9 @@ impl AutoScanManager {
                 db,
                 config,
                 index_options,
+                realtime_tx,
+                generation_shared,
+                generation_for_loop,
                 running,
                 scanning,
                 app_clone,
@@ -294,6 +425,10 @@ impl AutoScanManager {
             if let Some(handle) = self.scheduler_handle.take() {
                 handle.abort();
             }
+            if let Some(handle) = self.realtime_handle.take() {
+                handle.abort();
+            }
+            self.realtime_tx = None;
             self.runtime_config = None;
             self.watched_folders.clear();
             if let Ok(mut watchers) = self.watchers.lock() {
@@ -305,6 +440,7 @@ impl AutoScanManager {
         tracing::info!("停止自动扫描服务");
         self.running.store(false, Ordering::SeqCst);
         self.scanning.store(false, Ordering::SeqCst);
+        self.generation.fetch_add(1, Ordering::SeqCst);
 
         // 发送停止信号
         if let Some(stop_tx) = self.stop_tx.take() {
@@ -322,6 +458,10 @@ impl AutoScanManager {
         if let Some(handle) = self.scheduler_handle.take() {
             handle.abort();
         }
+        if let Some(handle) = self.realtime_handle.take() {
+            handle.abort();
+        }
+        self.realtime_tx = None;
 
         self.runtime_config = None;
         self.watched_folders.clear();
@@ -379,10 +519,17 @@ impl AutoScanManager {
     /// 获取状态
     pub fn status(&self) -> AutoScanStatus {
         let watched_paths = self.watched_folders.clone();
+        let active_watch_paths = self
+            .watchers
+            .lock()
+            .map(|w| w.keys().cloned().collect())
+            .unwrap_or_default();
         AutoScanStatus {
             running: self.running.load(Ordering::SeqCst),
             scanning: self.scanning.load(Ordering::SeqCst),
             watched_paths,
+            realtime_watch: self.realtime_watch,
+            active_watch_paths,
         }
     }
 
@@ -464,6 +611,9 @@ impl AutoScanManager {
         db: Arc<Database>,
         config: StepScanConfig,
         index_options: IndexOptions,
+        realtime_tx: Option<mpsc::Sender<RealtimeJob>>,
+        generation_shared: Arc<AtomicU64>,
+        generation: u64,
         running: Arc<AtomicBool>,
         scanning: Arc<AtomicBool>,
         app: AppHandle,
@@ -483,7 +633,19 @@ impl AutoScanManager {
 
                     match event {
                         ScanEvent::FileChanged(change_event) => {
-                            Self::handle_file_change(&db, &config, &index_options, &scanning, &app, change_event).await;
+                            Self::handle_file_change(
+                                &db,
+                                &config,
+                                &index_options,
+                                realtime_tx.as_ref(),
+                                &generation_shared,
+                                generation,
+                                &running,
+                                &scanning,
+                                &app,
+                                change_event,
+                            )
+                            .await;
                         }
                         ScanEvent::ScheduledScan(dir_path) => {
                             Self::handle_scheduled_scan(&db, &config, &index_options, &scanning, &app, &dir_path).await;
@@ -539,6 +701,10 @@ impl AutoScanManager {
         db: &Arc<Database>,
         _config: &StepScanConfig,
         index_options: &IndexOptions,
+        realtime_tx: Option<&mpsc::Sender<RealtimeJob>>,
+        generation_shared: &Arc<AtomicU64>,
+        generation: u64,
+        running: &Arc<AtomicBool>,
         scanning: &Arc<AtomicBool>,
         app: &AppHandle,
         event: FileChangeEvent,
@@ -582,72 +748,45 @@ impl AutoScanManager {
         // 根据变化类型处理
         match event.change_type {
             FileChangeType::Created | FileChangeType::Modified => {
-                let db = db.clone();
-                let scanning = scanning.clone();
-                let index_options = index_options.clone();
-                let dir_path = dir_path.clone();
-                let file_path = event.path.clone();
-                let path_str = path_str.clone();
-
-                tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_millis(800)).await;
-
-                    let mut acquired = false;
-                    for _ in 0..50 {
-                        if !scanning.swap(true, Ordering::SeqCst) {
-                            acquired = true;
-                            break;
+                // Best-effort realtime indexing (bounded + dedup) with cancellation checks.
+                if let Some(tx) = realtime_tx {
+                    if running.load(Ordering::SeqCst) && generation_shared.load(Ordering::SeqCst) == generation {
+                        let job = RealtimeJob {
+                            dir_path: dir_path.clone(),
+                            file_path: event.path.clone(),
+                        };
+                        if tx.try_send(job).is_err() {
+                            tracing::debug!("实时索引队列已满，跳过: {}", path_str);
                         }
-                        tokio::time::sleep(Duration::from_millis(100)).await;
                     }
-
-                    if !acquired {
+                } else {
+                    // Fallback: if no realtime worker, do a direct index (blocking).
+                    if scanning.swap(true, Ordering::SeqCst) {
                         return;
                     }
-
-                    let mut indexed_any = false;
-                    for attempt in 0..3 {
-                        let db_for_task = db.clone();
-                        let index_options_for_task = index_options.clone();
-                        let file_path_for_task = file_path.clone();
-
-                        let result = tokio::task::spawn_blocking(move || {
-                            let indexer = PhotoIndexer::new(db_for_task, index_options_for_task);
-                            indexer.index_single_file(file_path_for_task.as_path())
-                        })
-                        .await;
-
-                        match result {
-                            Ok(Ok(indexed)) => {
-                                indexed_any = indexed;
-                                break;
-                            }
-                            Ok(Err(e)) => {
-                                if attempt == 2 {
-                                    tracing::error!("索引文件失败 {}: {}", path_str, e);
-                                } else {
-                                    tokio::time::sleep(Duration::from_millis(400 * (attempt + 1) as u64)).await;
-                                }
-                            }
-                            Err(e) => {
-                                tracing::error!("索引任务失败 {}: {}", path_str, e);
-                                break;
-                            }
+                    let db_for_task = db.clone();
+                    let index_options_for_task = index_options.clone();
+                    let file_path_for_task = event.path.clone();
+                    let dir_path_for_task = dir_path.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        let indexer = PhotoIndexer::new(db_for_task.clone(), index_options_for_task);
+                        if indexer.index_single_file(file_path_for_task.as_path()).unwrap_or(false) {
+                            let _ = db_for_task.reset_scan_frequency(&dir_path_for_task);
                         }
-                    }
-
-                    if indexed_any {
-                        tracing::info!("已索引文件: {}", path_str);
-                        let _ = db.reset_scan_frequency(&dir_path);
-                    }
-
+                    })
+                    .await;
                     scanning.store(false, Ordering::SeqCst);
-                });
+                }
             }
             FileChangeType::Removed => {
                 // 标记文件为已删除
                 if let Err(e) = db.soft_delete_photo_by_path(&path_str) {
                     tracing::error!("标记删除失败 {}: {}", path_str, e);
+                } else {
+                    let _ = app.emit(
+                        "auto-scan:realtime-deleted",
+                        RealtimeIndexedPayload { path: path_str.clone() },
+                    );
                 }
             }
         }
