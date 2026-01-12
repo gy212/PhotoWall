@@ -418,6 +418,19 @@ pub fn run() {
 
             app.manage(app_state);
 
+            // Start/stop auto-scan service based on persisted settings.
+            let app_handle = app.handle().clone();
+            let startup_settings = settings.clone();
+            tauri::async_runtime::spawn(async move {
+                let state = app_handle.state::<AppState>();
+                let mut auto_scan = state.auto_scan_manager.lock().await;
+                if let Some(ref mut manager) = *auto_scan {
+                    if let Err(e) = manager.apply_settings(app_handle.clone(), &startup_settings).await {
+                        tracing::error!("apply auto scan settings failed: {}", e);
+                    }
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -176,32 +176,36 @@ const PhotoDetail = memo(function PhotoDetail({
       {(photo.focalLength || photo.aperture || photo.iso || photo.shutterSpeed) && (
         <div className="bg-surface rounded-xl p-4 border border-border">
           <h3 className="mb-3 text-sm font-semibold text-primary">拍摄参数</h3>
-          <dl className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-2">
             {photo.focalLength && (
-              <div className="flex justify-between">
-                <dt className="text-secondary">焦距</dt>
-                <dd className="font-medium text-primary">{photo.focalLength}mm</dd>
+              <div className="bg-background rounded-lg p-3 flex flex-col items-center justify-center text-center space-y-1">
+                <Icon name="focal_length" className="text-secondary h-5 w-5 mb-1" />
+                <div className="text-xs text-secondary">焦距</div>
+                <div className="text-primary font-bold">{photo.focalLength}mm</div>
               </div>
             )}
             {photo.aperture && (
-              <div className="flex justify-between">
-                <dt className="text-secondary">光圈</dt>
-                <dd className="font-medium text-primary">f/{photo.aperture}</dd>
+              <div className="bg-background rounded-lg p-3 flex flex-col items-center justify-center text-center space-y-1">
+                <Icon name="aperture" className="text-secondary h-5 w-5 mb-1" />
+                <div className="text-xs text-secondary">光圈</div>
+                <div className="text-primary font-bold">f/{photo.aperture}</div>
               </div>
             )}
             {photo.shutterSpeed && (
-              <div className="flex justify-between">
-                <dt className="text-secondary">快门</dt>
-                <dd className="font-medium text-primary">{photo.shutterSpeed}</dd>
+              <div className="bg-background rounded-lg p-3 flex flex-col items-center justify-center text-center space-y-1">
+                <Icon name="shutter_speed" className="text-secondary h-5 w-5 mb-1" />
+                <div className="text-xs text-secondary">快门</div>
+                <div className="text-primary font-bold">{photo.shutterSpeed}</div>
               </div>
             )}
             {photo.iso && (
-              <div className="flex justify-between">
-                <dt className="text-secondary">ISO</dt>
-                <dd className="font-medium text-primary">{photo.iso}</dd>
+              <div className="bg-background rounded-lg p-3 flex flex-col items-center justify-center text-center space-y-1">
+                <Icon name="iso" className="text-secondary h-5 w-5 mb-1" />
+                <div className="text-xs text-secondary">ISO</div>
+                <div className="text-primary font-bold">{photo.iso}</div>
               </div>
             )}
-          </dl>
+          </div>
         </div>
       )}
 

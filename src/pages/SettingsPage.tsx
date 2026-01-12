@@ -250,6 +250,7 @@ function SettingsPage() {
       };
       await saveSettings(settingsToSave);
       showMessage('success', '设置已保存');
+      await loadAutoScanStatus();
     } catch (err) {
       showMessage('error', `保存失败: ${err}`);
     } finally {
@@ -294,6 +295,7 @@ function SettingsPage() {
       if (selected && typeof selected === 'string') {
         await addSyncFolder(selected);
         await loadSyncFolders();
+        await loadAutoScanStatus();
         showMessage('success', '文件夹已添加到同步列表');
       }
     } catch (err) {
@@ -305,6 +307,7 @@ function SettingsPage() {
     try {
       await removeSyncFolder(folderPath);
       await loadSyncFolders();
+      await loadAutoScanStatus();
       showMessage('success', '文件夹已从同步列表移除');
     } catch (err) {
       showMessage('error', `移除文件夹失败: ${err}`);

@@ -5,7 +5,9 @@
 use tauri::{AppHandle, State};
 
 use crate::db::ScanDirectoryState;
-use crate::services::auto_scan::AutoScanStatus;
+use crate::services::{AutoScanStatus, StepScanConfig};
+use crate::services::indexer::IndexOptions;
+use crate::services::scanner::ScanOptions;
 use crate::utils::error::CommandError;
 use crate::AppState;
 
@@ -26,11 +28,32 @@ pub async fn start_auto_scan(
         });
     }
 
+    let mut step_config = StepScanConfig::default();
+    step_config.base_interval_secs = settings.scan.scan_interval.max(60);
+
+    let mut scan_options = ScanOptions::new();
+    scan_options.recursive = settings.scan.recursive;
+    if !settings.scan.excluded_patterns.is_empty() {
+        scan_options.exclude_dirs = settings.scan.excluded_patterns.clone();
+    }
+
+    let mut index_options = IndexOptions::default();
+    index_options.scan_options = scan_options;
+
+    let watched_folders = settings.scan.watched_folders.clone();
+    let realtime_watch = settings.scan.realtime_watch;
+
     // 启动自动扫描
     let mut auto_scan = state.auto_scan_manager.lock().await;
     if let Some(ref mut manager) = *auto_scan {
         manager
-            .start(app.clone(), settings.scan.watched_folders)
+            .start(
+                app.clone(),
+                watched_folders,
+                step_config,
+                index_options,
+                realtime_watch,
+            )
             .await
             .map_err(CommandError::from)?;
     }

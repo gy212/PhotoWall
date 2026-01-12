@@ -143,7 +143,13 @@ impl FileWatcher {
     /// 处理文件系统事件
     fn process_event(event: Event, images_only: bool) -> Option<FileChangeEvent> {
         // 获取事件路径
-        let path = event.paths.first()?.clone();
+        // 对于重命名事件，notify 可能返回 [from, to]，此时优先使用新路径。
+        let is_rename = matches!(event.kind, EventKind::Modify(ModifyKind::Name(_)));
+        let path = if is_rename && event.paths.len() >= 2 {
+            event.paths.get(1)?.clone()
+        } else {
+            event.paths.first()?.clone()
+        };
 
         // 如果只监控图片，检查文件类型
         if images_only && !is_image_file(&path) {
@@ -152,11 +158,17 @@ impl FileWatcher {
 
         // 判断变更类型
         let change_type = match event.kind {
-            EventKind::Create(CreateKind::File) => FileChangeType::Created,
-            EventKind::Modify(ModifyKind::Data(_)) | EventKind::Modify(ModifyKind::Name(_)) => {
-                FileChangeType::Modified
+            EventKind::Create(CreateKind::File) | EventKind::Create(CreateKind::Any) => {
+                FileChangeType::Created
             }
-            EventKind::Remove(RemoveKind::File) => FileChangeType::Removed,
+            EventKind::Modify(ModifyKind::Any)
+            | EventKind::Modify(ModifyKind::Data(_))
+            | EventKind::Modify(ModifyKind::Name(_))
+            | EventKind::Modify(ModifyKind::Metadata(_))
+            | EventKind::Modify(ModifyKind::Other) => FileChangeType::Modified,
+            EventKind::Remove(RemoveKind::File) | EventKind::Remove(RemoveKind::Any) => {
+                FileChangeType::Removed
+            }
             _ => return None, // 忽略其他事件
         };
 
@@ -172,6 +184,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;
+    use notify::event::RenameMode;
 
     #[test]
     fn test_watcher_creation() {
@@ -259,5 +272,51 @@ mod tests {
                 event.path
             );
         }
+    }
+
+    #[test]
+    fn test_process_event_basic_mapping() {
+        let created = FileWatcher::process_event(
+            Event {
+                kind: EventKind::Create(CreateKind::Any),
+                paths: vec![PathBuf::from("a.jpg")],
+                attrs: Default::default(),
+            },
+            true,
+        );
+        assert!(matches!(created, Some(FileChangeEvent { change_type: FileChangeType::Created, .. })));
+
+        let modified = FileWatcher::process_event(
+            Event {
+                kind: EventKind::Modify(ModifyKind::Any),
+                paths: vec![PathBuf::from("b.jpg")],
+                attrs: Default::default(),
+            },
+            true,
+        );
+        assert!(matches!(modified, Some(FileChangeEvent { change_type: FileChangeType::Modified, .. })));
+
+        let removed = FileWatcher::process_event(
+            Event {
+                kind: EventKind::Remove(RemoveKind::Any),
+                paths: vec![PathBuf::from("c.jpg")],
+                attrs: Default::default(),
+            },
+            true,
+        );
+        assert!(matches!(removed, Some(FileChangeEvent { change_type: FileChangeType::Removed, .. })));
+    }
+
+    #[test]
+    fn test_process_event_rename_prefers_new_path() {
+        let event = Event {
+            kind: EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+            paths: vec![PathBuf::from("old.jpg"), PathBuf::from("new.jpg")],
+            attrs: Default::default(),
+        };
+
+        let processed = FileWatcher::process_event(event, true).unwrap();
+        assert_eq!(processed.path, PathBuf::from("new.jpg"));
+        assert!(matches!(processed.change_type, FileChangeType::Modified));
     }
 }

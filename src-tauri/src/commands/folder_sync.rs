@@ -4,8 +4,9 @@
 
 use crate::services::SettingsManager;
 use crate::utils::error::CommandError;
+use crate::AppState;
 use std::path::Path;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
 
 /// 同步文件夹信息
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -44,7 +45,11 @@ pub async fn get_sync_folders(app: AppHandle) -> Result<Vec<SyncFolder>, Command
 
 /// 添加同步文件夹
 #[tauri::command]
-pub async fn add_sync_folder(app: AppHandle, folder_path: String) -> Result<bool, CommandError> {
+pub async fn add_sync_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    folder_path: String,
+) -> Result<bool, CommandError> {
     // 验证路径是否存在
     if !Path::new(&folder_path).exists() {
         return Err(CommandError {
@@ -76,6 +81,16 @@ pub async fn add_sync_folder(app: AppHandle, folder_path: String) -> Result<bool
     settings.scan.watched_folders.push(folder_path.clone());
     manager.save(&settings).map_err(CommandError::from)?;
 
+    if settings.scan.auto_scan {
+        let mut auto_scan = state.auto_scan_manager.lock().await;
+        if let Some(ref mut manager) = *auto_scan {
+            manager
+                .apply_settings(app.clone(), &settings)
+                .await
+                .map_err(CommandError::from)?;
+        }
+    }
+
     // 发送设置变更事件
     app.emit("sync-folders-changed", &settings.scan.watched_folders)
         .map_err(|e| CommandError {
@@ -89,7 +104,11 @@ pub async fn add_sync_folder(app: AppHandle, folder_path: String) -> Result<bool
 
 /// 删除同步文件夹
 #[tauri::command]
-pub async fn remove_sync_folder(app: AppHandle, folder_path: String) -> Result<bool, CommandError> {
+pub async fn remove_sync_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    folder_path: String,
+) -> Result<bool, CommandError> {
     let manager = SettingsManager::new(&app).map_err(CommandError::from)?;
     let mut settings = manager.load().map_err(CommandError::from)?;
 
@@ -108,6 +127,16 @@ pub async fn remove_sync_folder(app: AppHandle, folder_path: String) -> Result<b
     }
 
     manager.save(&settings).map_err(CommandError::from)?;
+
+    if settings.scan.auto_scan {
+        let mut auto_scan = state.auto_scan_manager.lock().await;
+        if let Some(ref mut manager) = *auto_scan {
+            manager
+                .apply_settings(app.clone(), &settings)
+                .await
+                .map_err(CommandError::from)?;
+        }
+    }
 
     // 发送设置变更事件
     app.emit("sync-folders-changed", &settings.scan.watched_folders)

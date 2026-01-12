@@ -71,7 +71,7 @@ pub struct IndexResult {
 }
 
 /// 索引选项
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexOptions {
     /// 扫描选项

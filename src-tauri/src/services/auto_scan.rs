@@ -2,7 +2,7 @@
 //!
 //! 实现混合方案：实时监控 (FileWatcher) + 定时扫描 (Scheduler) + 阶梯式扫描频率
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -11,15 +11,17 @@ use std::time::Duration;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 use crate::db::Database;
 use crate::services::indexer::{IndexOptions, PhotoIndexer};
-use crate::services::scanner::Scanner;
+use crate::services::scanner::{ScanOptions, Scanner};
 use crate::services::watcher::{FileChangeEvent, FileChangeType, FileWatcher};
 use crate::utils::error::AppResult;
+use crate::models::AppSettings;
 
 /// 阶梯式扫描配置
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StepScanConfig {
     /// 基础扫描间隔（秒）
     pub base_interval_secs: u64,
@@ -84,6 +86,14 @@ enum ScanEvent {
     ScheduledScan(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AutoScanRuntimeConfig {
+    watched_folders: Vec<String>,
+    step_config: StepScanConfig,
+    index_options: IndexOptions,
+    realtime_watch: bool,
+}
+
 /// 自动扫描管理器
 pub struct AutoScanManager {
     db: Arc<Database>,
@@ -93,6 +103,12 @@ pub struct AutoScanManager {
     scanning: Arc<AtomicBool>,
     event_tx: mpsc::Sender<ScanEvent>,
     stop_tx: Option<mpsc::Sender<()>>,
+    watched_folders: Vec<String>,
+    realtime_watch: bool,
+    index_options: IndexOptions,
+    runtime_config: Option<AutoScanRuntimeConfig>,
+    event_loop_handle: Option<JoinHandle<()>>,
+    scheduler_handle: Option<JoinHandle<()>>,
 }
 
 impl AutoScanManager {
@@ -107,6 +123,12 @@ impl AutoScanManager {
             scanning: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: None,
+            watched_folders: Vec::new(),
+            realtime_watch: true,
+            index_options: IndexOptions::default(),
+            runtime_config: None,
+            event_loop_handle: None,
+            scheduler_handle: None,
         }
     }
 
@@ -115,14 +137,89 @@ impl AutoScanManager {
         Self::new(db, StepScanConfig::default())
     }
 
+    fn normalize_watched_folders(mut watched_folders: Vec<String>) -> Vec<String> {
+        watched_folders.sort();
+        watched_folders.dedup();
+        watched_folders
+    }
+
+    fn runtime_config_from_settings(settings: &AppSettings) -> AutoScanRuntimeConfig {
+        let mut step_config = StepScanConfig::default();
+        step_config.base_interval_secs = settings.scan.scan_interval.max(60);
+
+        let mut scan_options = ScanOptions::new();
+        scan_options.recursive = settings.scan.recursive;
+        if !settings.scan.excluded_patterns.is_empty() {
+            scan_options.exclude_dirs = settings.scan.excluded_patterns.clone();
+        }
+
+        let mut index_options = IndexOptions::default();
+        index_options.scan_options = scan_options;
+
+        AutoScanRuntimeConfig {
+            watched_folders: Self::normalize_watched_folders(settings.scan.watched_folders.clone()),
+            step_config,
+            index_options,
+            realtime_watch: settings.scan.realtime_watch,
+        }
+    }
+
+    pub async fn apply_settings(&mut self, app: AppHandle, settings: &AppSettings) -> AppResult<()> {
+        let desired_enabled = settings.scan.auto_scan && !settings.scan.watched_folders.is_empty();
+        if !desired_enabled {
+            if let Some(cfg) = &self.runtime_config {
+                for dir_path in &cfg.watched_folders {
+                    let _ = self.db.deactivate_scan_directory(dir_path);
+                }
+            }
+            self.stop();
+            return Ok(());
+        }
+
+        let desired_config = Self::runtime_config_from_settings(settings);
+        if self.running.load(Ordering::SeqCst) && self.runtime_config.as_ref() == Some(&desired_config) {
+            return Ok(());
+        }
+
+        self.stop();
+        self.start(
+            app,
+            desired_config.watched_folders,
+            desired_config.step_config,
+            desired_config.index_options,
+            desired_config.realtime_watch,
+        )
+        .await
+    }
+
     /// 启动自动扫描服务
-    pub async fn start(&mut self, app: AppHandle, watched_folders: Vec<String>) -> AppResult<()> {
+    pub async fn start(
+        &mut self,
+        app: AppHandle,
+        watched_folders: Vec<String>,
+        config: StepScanConfig,
+        index_options: IndexOptions,
+        realtime_watch: bool,
+    ) -> AppResult<()> {
         if self.running.load(Ordering::SeqCst) {
             tracing::warn!("自动扫描服务已在运行");
             return Ok(());
         }
 
         tracing::info!("启动自动扫描服务，监控 {} 个文件夹", watched_folders.len());
+
+        let watched_folders = Self::normalize_watched_folders(watched_folders);
+
+        self.config = config.clone();
+        self.index_options = index_options.clone();
+        self.realtime_watch = realtime_watch;
+        self.watched_folders = watched_folders.clone();
+        self.runtime_config = Some(AutoScanRuntimeConfig {
+            watched_folders: watched_folders.clone(),
+            step_config: config.clone(),
+            index_options: index_options.clone(),
+            realtime_watch,
+        });
 
         self.running.store(true, Ordering::SeqCst);
 
@@ -132,11 +229,19 @@ impl AutoScanManager {
         self.event_tx = event_tx.clone();
         self.stop_tx = Some(stop_tx);
 
+        if let Ok(mut watchers) = self.watchers.lock() {
+            watchers.clear();
+        }
+
+        self.sync_active_scan_directories(&watched_folders)?;
+
         // 启动文件监控
+        if realtime_watch {
         for folder in &watched_folders {
             if let Err(e) = self.add_watch_path_internal(folder, event_tx.clone()) {
                 tracing::error!("无法监控文件夹 {}: {}", folder, e);
             }
+        }
         }
 
         // 初始化扫描目录状态
@@ -147,22 +252,24 @@ impl AutoScanManager {
         // 启动事件处理循环
         let db = self.db.clone();
         let config = self.config.clone();
+        let index_options = self.index_options.clone();
         let running = self.running.clone();
         let scanning = self.scanning.clone();
         let app_clone = app.clone();
 
-        tokio::spawn(async move {
+        self.event_loop_handle = Some(tokio::spawn(async move {
             Self::event_loop(
                 event_rx,
                 stop_rx,
                 db,
                 config,
+                index_options,
                 running,
                 scanning,
                 app_clone,
             )
             .await;
-        });
+        }));
 
         // 启动定时扫描调度器
         let db = self.db.clone();
@@ -170,9 +277,9 @@ impl AutoScanManager {
         let running = self.running.clone();
         let event_tx_clone = self.event_tx.clone();
 
-        tokio::spawn(async move {
+        self.scheduler_handle = Some(tokio::spawn(async move {
             Self::scheduler_loop(db, config, running, event_tx_clone).await;
-        });
+        }));
 
         Ok(())
     }
@@ -180,11 +287,24 @@ impl AutoScanManager {
     /// 停止自动扫描服务
     pub fn stop(&mut self) {
         if !self.running.load(Ordering::SeqCst) {
+            self.scanning.store(false, Ordering::SeqCst);
+            if let Some(handle) = self.event_loop_handle.take() {
+                handle.abort();
+            }
+            if let Some(handle) = self.scheduler_handle.take() {
+                handle.abort();
+            }
+            self.runtime_config = None;
+            self.watched_folders.clear();
+            if let Ok(mut watchers) = self.watchers.lock() {
+                watchers.clear();
+            }
             return;
         }
 
         tracing::info!("停止自动扫描服务");
         self.running.store(false, Ordering::SeqCst);
+        self.scanning.store(false, Ordering::SeqCst);
 
         // 发送停止信号
         if let Some(stop_tx) = self.stop_tx.take() {
@@ -195,6 +315,16 @@ impl AutoScanManager {
         if let Ok(mut watchers) = self.watchers.lock() {
             watchers.clear();
         }
+
+        if let Some(handle) = self.event_loop_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.scheduler_handle.take() {
+            handle.abort();
+        }
+
+        self.runtime_config = None;
+        self.watched_folders.clear();
     }
 
     /// 添加监控路径
@@ -248,11 +378,7 @@ impl AutoScanManager {
 
     /// 获取状态
     pub fn status(&self) -> AutoScanStatus {
-        let watched_paths = self
-            .watchers
-            .lock()
-            .map(|w| w.keys().cloned().collect())
-            .unwrap_or_default();
+        let watched_paths = self.watched_folders.clone();
         AutoScanStatus {
             running: self.running.load(Ordering::SeqCst),
             scanning: self.scanning.load(Ordering::SeqCst),
@@ -271,6 +397,39 @@ impl AutoScanManager {
             .event_tx
             .send(ScanEvent::ScheduledScan(dir_path.to_string()))
             .await;
+        Ok(())
+    }
+
+    fn sync_active_scan_directories(&self, watched_folders: &[String]) -> AppResult<()> {
+        let watched: HashSet<&str> = watched_folders.iter().map(|p| p.as_str()).collect();
+
+        // Deactivate directories no longer watched.
+        for dir in self.db.get_all_scan_directories()? {
+            if !watched.contains(dir.dir_path.as_str()) {
+                let _ = self.db.deactivate_scan_directory(&dir.dir_path);
+            }
+        }
+
+        // Ensure watched directories are active and scheduled.
+        for dir_path in watched_folders {
+            let existing = self.db.get_scan_directory(dir_path)?;
+            let needs_schedule = existing
+                .as_ref()
+                .map(|s| !s.is_active || s.next_scan_time.is_none())
+                .unwrap_or(true);
+            let file_count = existing.as_ref().map(|s| s.file_count).unwrap_or(0);
+
+            self.db.upsert_scan_directory(dir_path, file_count)?;
+
+            if needs_schedule {
+                let next_scan = chrono::Utc::now()
+                    + chrono::Duration::seconds(self.config.base_interval_secs as i64);
+                let _ = self
+                    .db
+                    .set_next_scan_time(dir_path, &next_scan.to_rfc3339())?;
+            }
+        }
+
         Ok(())
     }
 
@@ -304,6 +463,7 @@ impl AutoScanManager {
         mut stop_rx: mpsc::Receiver<()>,
         db: Arc<Database>,
         config: StepScanConfig,
+        index_options: IndexOptions,
         running: Arc<AtomicBool>,
         scanning: Arc<AtomicBool>,
         app: AppHandle,
@@ -323,10 +483,10 @@ impl AutoScanManager {
 
                     match event {
                         ScanEvent::FileChanged(change_event) => {
-                            Self::handle_file_change(&db, &config, &scanning, &app, change_event).await;
+                            Self::handle_file_change(&db, &config, &index_options, &scanning, &app, change_event).await;
                         }
                         ScanEvent::ScheduledScan(dir_path) => {
-                            Self::handle_scheduled_scan(&db, &config, &scanning, &app, &dir_path).await;
+                            Self::handle_scheduled_scan(&db, &config, &index_options, &scanning, &app, &dir_path).await;
                         }
                     }
                 }
@@ -378,6 +538,7 @@ impl AutoScanManager {
     async fn handle_file_change(
         db: &Arc<Database>,
         _config: &StepScanConfig,
+        index_options: &IndexOptions,
         scanning: &Arc<AtomicBool>,
         app: &AppHandle,
         event: FileChangeEvent,
@@ -421,27 +582,67 @@ impl AutoScanManager {
         // 根据变化类型处理
         match event.change_type {
             FileChangeType::Created | FileChangeType::Modified => {
-                // 索引单个文件
-                if scanning.swap(true, Ordering::SeqCst) {
-                    // 已有扫描在进行，跳过
-                    return;
-                }
+                let db = db.clone();
+                let scanning = scanning.clone();
+                let index_options = index_options.clone();
+                let dir_path = dir_path.clone();
+                let file_path = event.path.clone();
+                let path_str = path_str.clone();
 
-                let indexer = PhotoIndexer::new(db.clone(), IndexOptions::default());
-                match indexer.index_single_file(&event.path) {
-                    Ok(indexed) => {
-                        if indexed {
-                            tracing::info!("已索引文件: {}", path_str);
-                            // 重置该目录的扫描频率
-                            let _ = db.reset_scan_frequency(&dir_path);
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(800)).await;
+
+                    let mut acquired = false;
+                    for _ in 0..50 {
+                        if !scanning.swap(true, Ordering::SeqCst) {
+                            acquired = true;
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+
+                    if !acquired {
+                        return;
+                    }
+
+                    let mut indexed_any = false;
+                    for attempt in 0..3 {
+                        let db_for_task = db.clone();
+                        let index_options_for_task = index_options.clone();
+                        let file_path_for_task = file_path.clone();
+
+                        let result = tokio::task::spawn_blocking(move || {
+                            let indexer = PhotoIndexer::new(db_for_task, index_options_for_task);
+                            indexer.index_single_file(file_path_for_task.as_path())
+                        })
+                        .await;
+
+                        match result {
+                            Ok(Ok(indexed)) => {
+                                indexed_any = indexed;
+                                break;
+                            }
+                            Ok(Err(e)) => {
+                                if attempt == 2 {
+                                    tracing::error!("索引文件失败 {}: {}", path_str, e);
+                                } else {
+                                    tokio::time::sleep(Duration::from_millis(400 * (attempt + 1) as u64)).await;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("索引任务失败 {}: {}", path_str, e);
+                                break;
+                            }
                         }
                     }
-                    Err(e) => {
-                        tracing::error!("索引文件失败 {}: {}", path_str, e);
-                    }
-                }
 
-                scanning.store(false, Ordering::SeqCst);
+                    if indexed_any {
+                        tracing::info!("已索引文件: {}", path_str);
+                        let _ = db.reset_scan_frequency(&dir_path);
+                    }
+
+                    scanning.store(false, Ordering::SeqCst);
+                });
             }
             FileChangeType::Removed => {
                 // 标记文件为已删除
@@ -456,6 +657,7 @@ impl AutoScanManager {
     async fn handle_scheduled_scan(
         db: &Arc<Database>,
         config: &StepScanConfig,
+        index_options: &IndexOptions,
         scanning: &Arc<AtomicBool>,
         app: &AppHandle,
         dir_path: &str,
@@ -483,7 +685,7 @@ impl AutoScanManager {
         let old_multiplier = old_state.as_ref().map(|s| s.scan_multiplier).unwrap_or(1);
 
         // 执行扫描
-        let indexer = PhotoIndexer::new(db.clone(), IndexOptions::default());
+        let indexer = PhotoIndexer::new(db.clone(), index_options.clone());
         let result = indexer.index_directory(Path::new(dir_path));
 
         let (indexed, skipped, new_file_count) = match result {

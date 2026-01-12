@@ -15,10 +15,9 @@ const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const FavoritesPage = lazy(() => import('@/pages/FavoritesPage'));
 const TrashPage = lazy(() => import('@/pages/TrashPage'));
 const FoldersPage = lazy(() => import('@/pages/FoldersPage'));
-const NotebookStyleDemo = lazy(() => import('@/pages/NotebookStyleDemo'));
 
 // 页面顺序，用于判断滑动方向
-const PAGE_ORDER = ['/', '/albums', '/tags', '/folders', '/favorites', '/trash', '/settings', '/notebook-demo'];
+const PAGE_ORDER = ['/', '/albums', '/tags', '/folders', '/favorites', '/trash', '/settings'];
 
 // 计算方向的函数
 function getDirection(from: string, to: string): number {
@@ -212,7 +211,6 @@ function Layout() {
                   <Route path="/favorites" element={<FavoritesPage />} />
                   <Route path="/trash" element={<TrashPage />} />
                   <Route path="/folders" element={<FoldersPage />} />
-                  <Route path="/notebook-demo" element={<NotebookStyleDemo />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>

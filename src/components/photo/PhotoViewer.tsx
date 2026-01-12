@@ -641,25 +641,29 @@ const PhotoViewer = memo(function PhotoViewer({
                 <h4 className="mb-2 font-medium text-primary border-b border-border/50 pb-1">拍摄参数</h4>
                 <div className="grid grid-cols-2 gap-2">
                   {localPhoto.focalLength && (
-                    <div className="bg-background rounded p-2 text-center">
+                    <div className="bg-background rounded p-2 text-center flex flex-col items-center justify-center space-y-1">
+                      <Icon name="focal_length" className="text-secondary h-5 w-5 mb-1" />
                       <div className="text-xs text-secondary">焦距</div>
                       <div className="text-primary font-bold">{localPhoto.focalLength}mm</div>
                     </div>
                   )}
                   {localPhoto.aperture && (
-                    <div className="bg-background rounded p-2 text-center">
+                    <div className="bg-background rounded p-2 text-center flex flex-col items-center justify-center space-y-1">
+                      <Icon name="aperture" className="text-secondary h-5 w-5 mb-1" />
                       <div className="text-xs text-secondary">光圈</div>
                       <div className="text-primary font-bold">f/{localPhoto.aperture}</div>
                     </div>
                   )}
                   {localPhoto.shutterSpeed && (
-                    <div className="bg-background rounded p-2 text-center">
+                    <div className="bg-background rounded p-2 text-center flex flex-col items-center justify-center space-y-1">
+                      <Icon name="shutter_speed" className="text-secondary h-5 w-5 mb-1" />
                       <div className="text-xs text-secondary">快门</div>
                       <div className="text-primary font-bold">{localPhoto.shutterSpeed}</div>
                     </div>
                   )}
                   {localPhoto.iso && (
-                    <div className="bg-background rounded p-2 text-center">
+                    <div className="bg-background rounded p-2 text-center flex flex-col items-center justify-center space-y-1">
+                      <Icon name="iso" className="text-secondary h-5 w-5 mb-1" />
                       <div className="text-xs text-secondary">ISO</div>
                       <div className="text-primary font-bold">{localPhoto.iso}</div>
                     </div>

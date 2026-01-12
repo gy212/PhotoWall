@@ -281,10 +281,22 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
         </div>
       </div>
 
-      {/* 文件名遮罩 - 优化渐变 */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent p-3 pt-6 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-        <p className="truncate text-[11px] font-medium text-white/90 drop-shadow-sm leading-tight">
+      {/* 底部信息面板 - 参考高级卡片设计 */}
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-10 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        {/* 文件名 */}
+        <p className="truncate text-xs font-medium text-white drop-shadow-sm leading-tight">
           {photo.fileName}
+        </p>
+        {/* 元数据行：日期 + 大小 */}
+        <p className="mt-0.5 truncate text-[10px] text-white/70 leading-tight">
+          {photo.dateTaken
+            ? new Date(photo.dateTaken).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+            : new Date(photo.dateAdded).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })}
+          {' · '}
+          {photo.fileSize < 1024 * 1024
+            ? `${(photo.fileSize / 1024).toFixed(0)} KB`
+            : `${(photo.fileSize / 1024 / 1024).toFixed(1)} MB`}
+          {photo.width && photo.height && ` · ${photo.width}×${photo.height}`}
         </p>
       </div>
 

@@ -62,7 +62,11 @@ export type IconName =
     | 'warning'
     | 'wb_sunny'
     | 'calendar'
-    | 'camera';
+    | 'camera'
+    | 'focal_length'
+    | 'aperture'
+    | 'shutter_speed'
+    | 'iso';
 
 interface IconProps extends React.SVGProps<SVGSVGElement> {
     name: IconName;
@@ -74,6 +78,76 @@ interface IconProps extends React.SVGProps<SVGSVGElement> {
 const icons: Record<IconName, (props?: React.SVGProps<SVGPathElement>) => React.ReactElement> = {
     add: (props) => (
         <path d="M12 2C12.5523 2 13 2.44772 13 3V11H21C21.5523 11 22 11.4477 22 12C22 12.5523 21.5523 13 21 13H13V21C13 21.5523 12.5523 22 12 22C11.4477 22 11 21.5523 11 21V13H3C2.44772 13 2 12.5523 2 12C2 11.4477 2.44772 11 3 11H11V3C11 2.44772 11.4477 2 12 2Z" {...props} />
+    ),
+    focal_length: (props) => (
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 5h4V3H5c-1.1 0-2 .9-2 2v4h2V5zm14-2h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z" {...props} />
+    ),
+    aperture: (props) => (
+        <>
+            <path
+                d="M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                {...props}
+            />
+            <path
+                d="M12 9.5a2.5 2.5 0 1 1 0 5a2.5 2.5 0 1 1 0-5Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path d="M12 12V4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M12 12L18.928 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M12 12L18.928 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M12 12V20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M12 12L5.072 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M12 12L5.072 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </>
+    ),
+    shutter_speed: (props) => (
+        <path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" {...props} />
+    ),
+    iso: (props) => (
+        <>
+            <path
+                d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                {...props}
+            />
+            <path
+                d="M8 8v8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M13 8h-1a2 2 0 0 0 0 4h1a2 2 0 0 1 0 4h-1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M17 9a3 3 0 1 1 0 6a3 3 0 1 1 0-6Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </>
     ),
     add_photo_alternate: (props) => (
         <path d="M19 7H16V4C16 2.9 16.9 2 18 2C19.1 2 20 2.9 20 4V7H23C24.1 7 25 7.9 25 9C25 10.1 24.1 11 23 11H20V14C20 15.1 19.1 16 18 16C16.9 16 16 15.1 16 14V11H13C11.9 11 11 10.1 11 9C11 7.9 11.9 7 13 7H16V7ZM5 21C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3H11V5H5V19H19V13H21V19C21 20.1 20.1 21 19 21H5ZM13.96 12.29L11.21 15.83L9.25 13.47L6.5 17H17.5L13.96 12.29Z" {...props} />

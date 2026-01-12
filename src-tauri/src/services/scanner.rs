@@ -40,7 +40,7 @@ pub struct ScanProgress {
 }
 
 /// 扫描选项
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanOptions {
     /// 是否递归扫描子目录
