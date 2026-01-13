@@ -22,6 +22,25 @@ function getErrorDetails(error: unknown) {
   return { name: 'UnknownError', message: String(error), stack: undefined as string | undefined };
 }
 
+function escapeHtml(text: string) {
+  return text.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return ch;
+    }
+  });
+}
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
@@ -36,8 +55,8 @@ function renderFatal(error: unknown) {
       <h1 style="margin:0 0 12px 0;font-size:18px">PhotoWall 启动失败</h1>
       <div style="opacity:.8;margin-bottom:12px">前端发生致命错误，UI 未能渲染。</div>
       <pre style="white-space:pre-wrap;word-break:break-word;background:#111827;color:#f9fafb;padding:12px;border-radius:8px;overflow:auto">
-${details.name}: ${details.message}
-${details.stack ?? ''}
+${escapeHtml(details.name)}: ${escapeHtml(details.message)}
+${escapeHtml(details.stack ?? '')}
       </pre>
     </div>
   `;

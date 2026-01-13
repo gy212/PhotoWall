@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Condvar};
 use image::{DynamicImage, ImageFormat, imageops::FilterType, Rgb, RgbImage};
 use crate::utils::error::{AppError, AppResult};
+use crate::utils::sanitize_file_hash;
 
 // 引入 WIC 服务
 use super::wic::WicProcessor;
@@ -130,9 +131,10 @@ impl ThumbnailService {
     }
 
     /// 生成缓存 key
-    fn cache_key(file_hash: &str, size: ThumbnailSize) -> String {
-        format!("{}_{}", file_hash, size.name())
-    }
+fn cache_key(file_hash: &str, size: ThumbnailSize) -> String {
+    let hash = sanitize_file_hash(file_hash);
+    format!("{}_{}", hash, size.name())
+}
 
     /// 确保缓存目录结构存在
     fn ensure_cache_dirs(cache_dir: &Path) -> AppResult<()> {
@@ -155,11 +157,12 @@ impl ThumbnailService {
     }
 
     /// 获取缩略图缓存路径
-    pub fn get_cache_path(&self, file_hash: &str, size: ThumbnailSize) -> PathBuf {
-        self.cache_dir
-            .join(size.name())
-            .join(format!("{}.webp", file_hash))
-    }
+pub fn get_cache_path(&self, file_hash: &str, size: ThumbnailSize) -> PathBuf {
+    let file_hash = sanitize_file_hash(file_hash);
+    self.cache_dir
+        .join(size.name())
+        .join(format!("{}.webp", file_hash))
+}
 
     /// 检查缩略图是否存在于缓存中
     pub fn is_cached(&self, file_hash: &str, size: ThumbnailSize) -> bool {

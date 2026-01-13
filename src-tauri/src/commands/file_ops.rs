@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::services::{IndexOptions, IndexResult, PhotoIndexer};
 use crate::utils::error::{AppError, CommandError};
+use crate::utils::sanitize_filename_component;
 use crate::AppState;
 
 /// 导入选项
@@ -476,7 +477,13 @@ pub async fn batch_rename_photos(
                 .replace("{name}", old_name)
                 .replace("{date}", date);
 
-            let new_file_name = format!("{}.{}", new_name, extension);
+            let safe_base = sanitize_filename_component(&new_name);
+            let safe_ext = sanitize_filename_component(extension);
+            let new_file_name = if safe_base.is_empty() {
+                format!("photo_{}.{}", photo_id, safe_ext)
+            } else {
+                format!("{}.{}", safe_base, safe_ext)
+            };
             let new_path = old_path.parent()
                 .unwrap_or_else(|| Path::new(""))
                 .join(&new_file_name);

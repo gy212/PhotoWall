@@ -8,6 +8,7 @@ use tauri::State;
 
 use crate::services::{ThumbnailSize, ThumbnailTask};
 use crate::utils::error::{AppError, CommandError};
+use crate::utils::sanitize_file_hash;
 use crate::AppState;
 
 // ============ 全局统计 ============
@@ -268,7 +269,7 @@ pub async fn enqueue_thumbnail(
 
     let task = ThumbnailTask::with_dimensions(
         PathBuf::from(source_path),
-        file_hash,
+        sanitize_file_hash(&file_hash),
         size,
         priority.unwrap_or(0),
         width,
@@ -295,7 +296,7 @@ pub async fn enqueue_thumbnails_batch(
                 .unwrap_or(ThumbnailSize::Medium);
             ThumbnailTask::with_dimensions(
                 PathBuf::from(input.source_path),
-                input.file_hash,
+                sanitize_file_hash(&input.file_hash),
                 size,
                 input.priority.unwrap_or(0),
                 input.width,
@@ -314,7 +315,7 @@ pub async fn cancel_thumbnail(
     state: State<'_, AppState>,
     file_hash: String,
 ) -> Result<(), CommandError> {
-    state.thumbnail_queue.cancel_by_hash(&file_hash);
+    state.thumbnail_queue.cancel_by_hash(&sanitize_file_hash(&file_hash));
     Ok(())
 }
 
@@ -331,6 +332,7 @@ pub async fn get_thumbnail_cache_path(
         .unwrap_or(ThumbnailSize::Medium);
 
     let service = &state.thumbnail_service;
+    let file_hash = sanitize_file_hash(&file_hash);
     if service.is_cached(&file_hash, size) {
         Ok(Some(
             service
