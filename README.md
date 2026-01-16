@@ -4,7 +4,7 @@
 
 > ⚠️ **项目状态**：本项目仍在积极开发中，部分功能可能不完善。
 
-PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能够帮助您轻松管理电脑上的所有照片，提供流畅的浏览体验和丰富的整理功能。
+PhotoWall 是一款基于 **Tauri + React + TypeScript + Vite** 的 Windows 桌面照片管理软件，专注于本地照片的浏览、索引与整理体验。
 
 ---
 
@@ -12,6 +12,7 @@ PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能�
 
 - [系统要求](#系统要求)
 - [安装说明](#安装说明)
+- [开发与构建](#开发与构建)
 - [快速开始](#快速开始)
 - [主要功能](#主要功能)
   - [导入照片](#导入照片)
@@ -25,6 +26,10 @@ PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能�
 - [设置选项](#设置选项)
 - [支持的格式](#支持的格式)
 - [常见问题](#常见问题)
+- [数据存储位置](#数据存储位置)
+- [项目结构](#项目结构)
+- [贡献指南](#贡献指南)
+- [技术支持](#技术支持)
 
 ---
 
@@ -41,29 +46,54 @@ PhotoWall 是一款专为 Windows 设计的高性能照片管理软件。它能�
 
 ### 从源码构建
 
-**环境要求**：
-- Node.js 18+
-- Rust 1.70+
-- pnpm 或 npm
+**环境要求（Windows）**：
+- Node.js 18+（仓库使用 `package-lock.json`，推荐使用 npm）
+- Rust stable（建议使用 MSVC 工具链）
+- WebView2 Runtime（Windows 11 已内置）
 
 **构建步骤**：
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/PhotoWall.git
+git clone https://github.com/gy212/PhotoWall.git
 cd PhotoWall
 
 # 安装依赖
 npm install
 
-# 开发模式运行
+# 开发模式运行（桌面端：自动启动 Vite + Tauri）
 npm run tauri dev
 
-# 构建生产版本
+# 构建生产版本（桌面端）
 npm run tauri build
 ```
 
 构建完成后，安装包位于 `src-tauri/target/release/bundle/`
+
+---
+
+## 开发与构建
+
+### 常用命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动 Web UI（Vite） |
+| `npm run build` | TypeScript 类型检查 + 构建 Web UI 到 `dist/` |
+| `npm run tauri dev` | 启动桌面端开发（Tauri） |
+| `npm run tauri build` | 构建桌面端安装包/可执行文件 |
+| `npm run test` | 运行 Vitest |
+| `npm run test:coverage` | 运行测试并生成覆盖率（输出到 `coverage/`） |
+| `npm run lint` | ESLint 检查 |
+| `npm run lint:fix` | ESLint 自动修复 |
+| `npm run format` | Prettier 格式化 `src/` |
+
+### 类型与数据结构同步
+
+- 前端类型：`src/types/`
+- 后端（Rust）数据结构：`src-tauri/src/**`
+
+当 Rust 命令/结构体对前端暴露 payload 时，建议同步更新对应的 TypeScript 类型，避免运行时字段不一致。
 
 ---
 
@@ -348,6 +378,24 @@ PhotoWall 支持以下常见图片格式：
 │   └── settings.json
 └── Logs\              # 日志文件
 ```
+
+---
+
+## 项目结构
+
+- `src/`：React + TypeScript 前端（`@/` 为 `src/` 别名）
+- `src/test/`：Vitest 测试与公共测试工具
+- `public/`：Vite 静态资源
+- `src-tauri/`：Tauri（Rust）后端与打包配置
+- `docs/`：设计/方案文档
+
+---
+
+## 贡献指南
+
+- 提交前建议执行：`npm run test`、`npm run lint`
+- 避免提交真实用户数据（如 `*.db`、缓存目录等），也不要在日志中打印敏感的本地路径
+- 如需调整 Tauri 文件访问范围，请先评估最小权限并在 PR 中明确说明（配置见 `src-tauri/tauri.conf.json`）
 
 ---
 
