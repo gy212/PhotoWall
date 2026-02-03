@@ -1,0 +1,99 @@
+[package]
+name = "photowall-core"
+version = "0.1.0"
+description = "PhotoWall core library - shared business logic for Tauri and Qt frontends"
+authors = ["PhotoWall Team"]
+edition = "2021"
+
+[features]
+default = []
+tokio-runtime = ["tokio"]
+
+[dependencies]
+# 序列化
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 异步运行时 (optional)
+tokio = { version = "1", features = ["full"], optional = true }
+
+# 数据库
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# 图像处理
+image = "0.25"
+
+# RAW 格式解码
+rawloader = "0.37"
+
+# 元数据提取
+kamadak-exif = "0.6"
+
+# 文件系统
+walkdir = "2"
+notify = "7"
+
+# 正则表达式
+regex = "1"
+
+# 并行处理
+rayon = "1"
+
+# 日志
+tracing = "0.1"
+
+# 时间处理
+chrono = "0.4"
+
+# 错误处理
+thiserror = "2"
+anyhow = "1"
+
+# 哈希计算
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+# 目录路径
+dirs = "5"
+
+# 回收站支持
+trash = "5"
+
+# LibRaw 动态加载
+libloading = "0.8"
+scopeguard = "1"
+
+# 快速模糊算法
+fastblur = "0.1"
+
+# Base64 编码
+base64 = "0.22"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Graphics_Imaging",
+    "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Graphics",
+    "Win32_System_WinRT_Graphics_Direct2D",
+    "Win32_System_WinRT_Composition",
+    "Win32_System_SystemInformation",
+    "UI_Composition",
+    "UI_Composition_Desktop",
+    "UI",
+    "Graphics_Effects",
+    "Foundation",
+    "Foundation_Collections",
+    "Foundation_Numerics",
+    "System",
+] }
+windows-numerics = "0.3"
+windows-collections = "0.3"
+windows-core = "0.62.2"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }

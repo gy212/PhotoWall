@@ -166,3 +166,25 @@ export async function getPhotoStats(): Promise<PhotoStats> {
 export async function getRecentlyEditedPhoto(): Promise<Photo | null> {
   return invoke<Photo | null>('get_recently_edited_photo');
 }
+
+/**
+ * 搜索建议项
+ */
+export interface SearchSuggestionItem {
+  /** 建议类型: file, camera, lens, tag */
+  suggestionType: string;
+  /** 建议文本 */
+  text: string;
+  /** 显示标签 */
+  label?: string;
+}
+
+/**
+ * 获取搜索建议
+ */
+export async function getSearchSuggestions(
+  prefix: string,
+  limit?: number
+): Promise<SearchSuggestionItem[]> {
+  return invoke<SearchSuggestionItem[]>('get_search_suggestions', { prefix, limit });
+}

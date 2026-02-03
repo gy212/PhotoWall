@@ -54,6 +54,14 @@ pub struct Photo {
     pub is_deleted: bool,
     /// 删除时间
     pub deleted_at: Option<String>,
+    /// 相关性评分（仅在 FTS 搜索时返回）
+    pub relevance_score: Option<f64>,
+    /// OCR 识别的文字
+    pub ocr_text: Option<String>,
+    /// OCR 状态: 0=未处理, 1=已处理, 2=失败, 3=无文字
+    pub ocr_status: i32,
+    /// OCR 处理时间
+    pub ocr_processed_at: Option<String>,
 }
 
 impl Photo {
@@ -89,6 +97,10 @@ impl Photo {
             is_favorite: false,
             is_deleted: false,
             deleted_at: None,
+            relevance_score: None,
+            ocr_text: None,
+            ocr_status: 0,
+            ocr_processed_at: None,
         }
     }
 }

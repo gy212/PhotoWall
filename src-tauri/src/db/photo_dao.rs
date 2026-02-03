@@ -7,6 +7,7 @@ use crate::models::{
     PaginatedResult, PaginationParams, Photo, PhotoCursor, PhotoSortField, PhotoSortOptions,
     SearchFilters, SortOrder,
 };
+use crate::services::{QueryParser, FieldFilter, FieldOperator};
 use crate::utils::error::{AppError, AppResult};
 
 use super::connection::Database;
@@ -16,6 +17,7 @@ enum CursorValue {
     Null,
     Text(String),
     Int(i64),
+    Float(f64),
 }
 
 struct CursorCondition {
@@ -40,6 +42,17 @@ fn parse_cursor_value(field: PhotoSortField, value: &serde_json::Value) -> AppRe
                 .map_err(|_| AppError::General("游标值必须是整数".to_string())),
             _ => Err(AppError::General("游标值类型不匹配".to_string())),
         },
+        PhotoSortField::Relevance => match value {
+            serde_json::Value::Number(n) => n
+                .as_f64()
+                .map(CursorValue::Float)
+                .ok_or_else(|| AppError::General("游标值必须是数值".to_string())),
+            serde_json::Value::String(s) => s
+                .parse::<f64>()
+                .map(CursorValue::Float)
+                .map_err(|_| AppError::General("游标值必须是数值".to_string())),
+            _ => Err(AppError::General("游标值类型不匹配".to_string())),
+        },
         _ => match value {
             serde_json::Value::String(s) => Ok(CursorValue::Text(s.clone())),
             serde_json::Value::Number(n) => Ok(CursorValue::Text(n.to_string())),
@@ -52,6 +65,7 @@ fn build_cursor_condition(
     column: &str,
     sort: &PhotoSortOptions,
     cursor: &PhotoCursor,
+    id_column: &str,
 ) -> AppResult<CursorCondition> {
     let cmp_op = match sort.order {
         SortOrder::Asc => ">",
@@ -61,20 +75,27 @@ fn build_cursor_condition(
     let cursor_value = parse_cursor_value(sort.field, &cursor.sort_value)?;
     match cursor_value {
         CursorValue::Null => Ok(CursorCondition {
-            sql: format!("({} IS NULL AND photo_id {} ?)", column, cmp_op),
+            sql: format!("({} IS NULL AND {} {} ?)", column, id_column, cmp_op),
             params: vec![Box::new(cursor.photo_id)],
         }),
         CursorValue::Text(v) => Ok(CursorCondition {
             sql: format!(
-                "({0} {1} ? OR ({0} = ? AND photo_id {1} ?) OR {0} IS NULL)",
-                column, cmp_op
+                "({0} {1} ? OR ({0} = ? AND {2} {1} ?) OR {0} IS NULL)",
+                column, cmp_op, id_column
             ),
             params: vec![Box::new(v.clone()), Box::new(v), Box::new(cursor.photo_id)],
         }),
         CursorValue::Int(v) => Ok(CursorCondition {
             sql: format!(
-                "({0} {1} ? OR ({0} = ? AND photo_id {1} ?) OR {0} IS NULL)",
-                column, cmp_op
+                "({0} {1} ? OR ({0} = ? AND {2} {1} ?) OR {0} IS NULL)",
+                column, cmp_op, id_column
+            ),
+            params: vec![Box::new(v), Box::new(v), Box::new(cursor.photo_id)],
+        }),
+        CursorValue::Float(v) => Ok(CursorCondition {
+            sql: format!(
+                "({0} {1} ? OR ({0} = ? AND {2} {1} ?) OR {0} IS NULL)",
+                column, cmp_op, id_column
             ),
             params: vec![Box::new(v), Box::new(v), Box::new(cursor.photo_id)],
         }),
@@ -108,6 +129,10 @@ fn row_to_photo(row: &Row<'_>) -> rusqlite::Result<Photo> {
         is_favorite: row.get::<_, i32>("is_favorite")? != 0,
         is_deleted: row.get::<_, i32>("is_deleted").unwrap_or(0) != 0,
         deleted_at: row.get("deleted_at").ok(),
+        relevance_score: row.get::<_, Option<f64>>("relevance_score").ok().flatten(),
+        ocr_text: row.get("ocr_text").ok(),
+        ocr_status: row.get::<_, i32>("ocr_status").unwrap_or(0),
+        ocr_processed_at: row.get("ocr_processed_at").ok(),
     })
 }
 
@@ -347,11 +372,21 @@ impl Database {
         // 计算偏移量
         let offset = ((pagination.page - 1) * pagination.page_size) as i64;
 
+        // 相关性排序仅在 FTS 搜索中生效，普通列表降级为拍摄时间
+        let effective_sort = if sort.field.is_relevance() {
+            PhotoSortOptions {
+                field: PhotoSortField::DateTaken,
+                order: sort.order,
+            }
+        } else {
+            sort.clone()
+        };
+
         // 构建排序 SQL
         let order_sql = format!(
             "ORDER BY {} {} NULLS LAST",
-            sort.field.as_column(),
-            sort.order.as_sql()
+            effective_sort.field.as_column(),
+            effective_sort.order.as_sql()
         );
 
         let sql = format!(
@@ -377,11 +412,25 @@ impl Database {
     ) -> AppResult<Vec<Photo>> {
         let conn = self.connection()?;
 
+        let effective_sort = if sort.field.is_relevance() {
+            PhotoSortOptions {
+                field: PhotoSortField::DateTaken,
+                order: sort.order,
+            }
+        } else {
+            sort.clone()
+        };
+
         let mut sql = String::from("SELECT * FROM photos WHERE is_deleted = 0");
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
         if let Some(cursor) = cursor {
-            let condition = build_cursor_condition(sort.field.as_column(), sort, cursor)?;
+            let condition = build_cursor_condition(
+                effective_sort.field.as_column(),
+                &effective_sort,
+                cursor,
+                "photo_id",
+            )?;
             sql.push_str(" AND ");
             sql.push_str(&condition.sql);
             params_vec.extend(condition.params);
@@ -390,9 +439,9 @@ impl Database {
         // 稳定排序：在主排序字段后追加 photo_id 作为 tie-breaker
         let order_sql = format!(
             " ORDER BY {} {} NULLS LAST, photo_id {}",
-            sort.field.as_column(),
-            sort.order.as_sql(),
-            sort.order.as_sql()
+            effective_sort.field.as_column(),
+            effective_sort.order.as_sql(),
+            effective_sort.order.as_sql()
         );
         sql.push_str(&order_sql);
         sql.push_str(" LIMIT ?");
@@ -569,6 +618,80 @@ impl Database {
 
     // ==================== 搜索功能 ====================
 
+    /// 应用查询解析器的字段过滤条件
+    fn apply_field_filters(
+        field_filters: &[FieldFilter],
+        where_clauses: &mut Vec<String>,
+        params_vec: &mut Vec<Box<dyn rusqlite::ToSql>>,
+    ) {
+        Self::apply_field_filters_with_alias(field_filters, where_clauses, params_vec, "");
+    }
+
+    /// 应用查询解析器的字段过滤条件（带表别名）
+    fn apply_field_filters_with_alias(
+        field_filters: &[FieldFilter],
+        where_clauses: &mut Vec<String>,
+        params_vec: &mut Vec<Box<dyn rusqlite::ToSql>>,
+        alias: &str,
+    ) {
+        let prefix = if alias.is_empty() { String::new() } else { format!("{}.", alias) };
+
+        for filter in field_filters {
+            let column = match filter.field.as_str() {
+                "camera" => format!("{}camera_model", prefix),
+                "lens" => format!("{}lens_model", prefix),
+                "iso" => format!("{}iso", prefix),
+                "f" | "aperture" => format!("{}aperture", prefix),
+                "focal" => format!("{}focal_length", prefix),
+                "rating" => format!("{}rating", prefix),
+                "date" => format!("{}date_taken", prefix),
+                "path" => format!("{}file_path", prefix),
+                "name" => format!("{}file_name", prefix),
+                "format" => format!("{}format", prefix),
+                _ => continue,
+            };
+
+            // 根据字段类型和操作符构建条件
+            match filter.field.as_str() {
+                // 文本字段使用 LIKE
+                "camera" | "lens" | "path" | "name" | "format" => {
+                    where_clauses.push(format!("{} LIKE ?", column));
+                    params_vec.push(Box::new(format!("%{}%", filter.value)));
+                }
+                // 数值字段使用比较操作符
+                "iso" | "f" | "aperture" | "focal" | "rating" => {
+                    let op = match filter.operator {
+                        FieldOperator::Eq => "=",
+                        FieldOperator::Gt => ">",
+                        FieldOperator::Gte => ">=",
+                        FieldOperator::Lt => "<",
+                        FieldOperator::Lte => "<=",
+                    };
+                    where_clauses.push(format!("{} {} ?", column, op));
+                    // 尝试解析为数值
+                    if let Ok(num) = filter.value.parse::<f64>() {
+                        params_vec.push(Box::new(num));
+                    } else {
+                        params_vec.push(Box::new(filter.value.clone()));
+                    }
+                }
+                // 日期字段
+                "date" => {
+                    let op = match filter.operator {
+                        FieldOperator::Eq => "=",
+                        FieldOperator::Gt => ">",
+                        FieldOperator::Gte => ">=",
+                        FieldOperator::Lt => "<",
+                        FieldOperator::Lte => "<=",
+                    };
+                    where_clauses.push(format!("{} {} ?", column, op));
+                    params_vec.push(Box::new(filter.value.clone()));
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// 搜索照片（支持多种过滤条件）
     pub fn search_photos(
         &self,
@@ -582,60 +705,80 @@ impl Database {
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
         // 排除已删除的照片
-        where_clauses.push("is_deleted = 0".to_string());
+        where_clauses.push("p.is_deleted = 0".to_string());
 
-        // 全文搜索查询
+        // 是否使用 FTS 查询（用于相关性排序）
+        let mut has_fts_query = false;
+        let mut fts_query_value: Option<String> = None;
+
+        // 全文搜索查询 - 使用查询解析器
         if let Some(ref query) = filters.query {
             if !query.trim().is_empty() {
-                where_clauses.push(
-                    "photo_id IN (SELECT rowid FROM photos_fts WHERE photos_fts MATCH ?)".to_string()
-                );
-                // 为 FTS5 转义特殊字符，并添加前缀匹配
-                let fts_query = format!("{}*", query.replace('"', "\"\""));
-                params_vec.push(Box::new(fts_query));
+                let parsed = QueryParser::parse(query);
+
+                // 应用 FTS5 查询
+                if let Some(fts_query) = parsed.fts_query {
+                    has_fts_query = true;
+                    fts_query_value = Some(fts_query);
+                }
+
+                // 应用字段过滤条件
+                Self::apply_field_filters_with_alias(&parsed.field_filters, &mut where_clauses, &mut params_vec, "p");
+
+                // 应用标签名称过滤
+                if !parsed.tag_names.is_empty() {
+                    let placeholders: Vec<String> = parsed.tag_names.iter().map(|_| "?".to_string()).collect();
+                    where_clauses.push(format!(
+                        "p.photo_id IN (SELECT DISTINCT pt.photo_id FROM photo_tags pt JOIN tags t ON pt.tag_id = t.tag_id WHERE t.tag_name IN ({}))",
+                        placeholders.join(", ")
+                    ));
+                    for tag_name in &parsed.tag_names {
+                        params_vec.push(Box::new(tag_name.clone()));
+                    }
+                }
             }
         }
 
         // 日期范围过滤
         if let Some(ref date_from) = filters.date_from {
-            where_clauses.push("date_taken >= ?".to_string());
+            where_clauses.push("p.date_taken >= ?".to_string());
             params_vec.push(Box::new(date_from.clone()));
         }
         if let Some(ref date_to) = filters.date_to {
-            where_clauses.push("date_taken <= ?".to_string());
+            where_clauses.push("p.date_taken <= ?".to_string());
             params_vec.push(Box::new(date_to.clone()));
         }
 
         // 相机型号过滤
         if let Some(ref camera_model) = filters.camera_model {
-            where_clauses.push("camera_model LIKE ?".to_string());
+            where_clauses.push("p.camera_model LIKE ?".to_string());
             params_vec.push(Box::new(format!("%{}%", camera_model)));
         }
 
         // 镜头型号过滤
         if let Some(ref lens_model) = filters.lens_model {
-            where_clauses.push("lens_model LIKE ?".to_string());
+            where_clauses.push("p.lens_model LIKE ?".to_string());
             params_vec.push(Box::new(format!("%{}%", lens_model)));
         }
 
         // 评分过滤
         if let Some(min_rating) = filters.min_rating {
-            where_clauses.push("rating >= ?".to_string());
+            where_clauses.push("p.rating >= ?".to_string());
             params_vec.push(Box::new(min_rating));
         }
         if let Some(max_rating) = filters.max_rating {
-            where_clauses.push("rating <= ?".to_string());
+            where_clauses.push("p.rating <= ?".to_string());
             params_vec.push(Box::new(max_rating));
         }
 
         // 收藏过滤
         if filters.favorites_only == Some(true) {
-            where_clauses.push("is_favorite = 1".to_string());
+            where_clauses.push("p.is_favorite = 1".to_string());
         }
 
         // GPS 过滤
         if filters.has_gps == Some(true) {
-            where_clauses.push("gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL".to_string());
+            where_clauses.push("p.gps_latitude IS NOT NULL AND p.gps_longitude IS NOT NULL".to_string());
         }
 
         // 文件扩展名过滤（使用 format 字段）
@@ -643,7 +786,7 @@ impl Database {
             if !extensions.is_empty() {
                 let placeholders: Vec<String> = extensions.iter().map(|_| "?".to_string()).collect();
                 where_clauses.push(format!(
-                    "LOWER(format) IN ({})",
+                    "LOWER(p.format) IN ({})",
                     placeholders.join(", ")
                 ));
                 for ext in extensions {
@@ -657,7 +800,7 @@ impl Database {
             if !tag_ids.is_empty() {
                 let placeholders: Vec<String> = tag_ids.iter().map(|_| "?".to_string()).collect();
                 where_clauses.push(format!(
-                    "photo_id IN (SELECT DISTINCT photo_id FROM photo_tags WHERE tag_id IN ({}))",
+                    "p.photo_id IN (SELECT DISTINCT photo_id FROM photo_tags WHERE tag_id IN ({}))",
                     placeholders.join(", ")
                 ));
                 for tag_id in tag_ids {
@@ -669,45 +812,147 @@ impl Database {
         // 相册过滤
         if let Some(album_id) = filters.album_id {
             where_clauses.push(
-                "photo_id IN (SELECT photo_id FROM album_photos WHERE album_id = ?)".to_string()
+                "p.photo_id IN (SELECT photo_id FROM album_photos WHERE album_id = ?)".to_string()
             );
             params_vec.push(Box::new(album_id));
         }
 
-        // 构建 WHERE 子句
-        let where_sql = format!("WHERE {}", where_clauses.join(" AND "));
+        // ========== EXIF 过滤 ==========
+        if let Some(iso_min) = filters.iso_min {
+            where_clauses.push("p.iso >= ?".to_string());
+            params_vec.push(Box::new(iso_min));
+        }
+        if let Some(iso_max) = filters.iso_max {
+            where_clauses.push("p.iso <= ?".to_string());
+            params_vec.push(Box::new(iso_max));
+        }
+        if let Some(aperture_min) = filters.aperture_min {
+            where_clauses.push("p.aperture >= ?".to_string());
+            params_vec.push(Box::new(aperture_min));
+        }
+        if let Some(aperture_max) = filters.aperture_max {
+            where_clauses.push("p.aperture <= ?".to_string());
+            params_vec.push(Box::new(aperture_max));
+        }
+        if let Some(focal_min) = filters.focal_length_min {
+            where_clauses.push("p.focal_length >= ?".to_string());
+            params_vec.push(Box::new(focal_min));
+        }
+        if let Some(focal_max) = filters.focal_length_max {
+            where_clauses.push("p.focal_length <= ?".to_string());
+            params_vec.push(Box::new(focal_max));
+        }
+        if let Some(ref shutter) = filters.shutter_speed {
+            where_clauses.push("p.shutter_speed = ?".to_string());
+            params_vec.push(Box::new(shutter.clone()));
+        }
+
+        // 判断是否使用相关性排序
+        let use_relevance_sort = sort.field.is_relevance() && has_fts_query;
+        let effective_sort_field = if sort.field.is_relevance() && !has_fts_query {
+            PhotoSortField::DateTaken
+        } else {
+            sort.field
+        };
+
+        // 非相关性排序时，将 FTS 条件合并进 WHERE
+        if !use_relevance_sort {
+            if let Some(fts_query) = fts_query_value.take() {
+                where_clauses.push(
+                    "p.photo_id IN (SELECT rowid FROM photos_fts WHERE photos_fts MATCH ?)".to_string(),
+                );
+                params_vec.push(Box::new(fts_query));
+            }
+        }
 
         // 构建排序 SQL
-        let order_sql = format!(
-            "ORDER BY {} {} NULLS LAST",
-            sort.field.as_column(),
-            sort.order.as_sql()
-        );
-
-        // 获取总数
-        let count_sql = format!("SELECT COUNT(*) FROM photos {}", where_sql);
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-        let total: i64 = conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?;
+        let order_sql = if use_relevance_sort {
+            // 使用 bm25() 进行相关性排序（值越小越相关）
+            format!(
+                "ORDER BY relevance_score {}",
+                if matches!(sort.order, SortOrder::Desc) { "DESC" } else { "ASC" }
+            )
+        } else {
+            format!(
+                "ORDER BY p.{} {} NULLS LAST",
+                effective_sort_field.as_column(),
+                sort.order.as_sql()
+            )
+        };
 
         // 计算偏移量
         let offset = ((pagination.page - 1) * pagination.page_size) as i64;
 
-        // 获取数据
-        let data_sql = format!(
-            "SELECT * FROM photos {} {} LIMIT ? OFFSET ?",
-            where_sql, order_sql
-        );
+        // 获取总数 + 数据（根据是否使用相关性排序选择不同的查询）
+        let (count_sql, data_sql) = if use_relevance_sort {
+            let base_where = where_clauses.join(" AND ");
+            (
+                format!(
+                    "SELECT COUNT(*) FROM photos p JOIN photos_fts ON p.photo_id = photos_fts.rowid WHERE photos_fts MATCH ? AND {}",
+                    base_where
+                ),
+                format!(
+                    r#"SELECT p.*, bm25(photos_fts) as relevance_score
+                       FROM photos p
+                       JOIN photos_fts ON p.photo_id = photos_fts.rowid
+                       WHERE photos_fts MATCH ? AND {}
+                       {} LIMIT ? OFFSET ?"#,
+                    base_where,
+                    order_sql
+                ),
+            )
+        } else {
+            let where_sql = format!("WHERE {}", where_clauses.join(" AND "));
+            (
+                format!("SELECT COUNT(*) FROM photos p {}", where_sql),
+                format!(
+                    "SELECT p.* FROM photos p {} {} LIMIT ? OFFSET ?",
+                    where_sql, order_sql
+                ),
+            )
+        };
 
-        // 添加分页参数
-        params_vec.push(Box::new(pagination.page_size as i64));
-        params_vec.push(Box::new(offset));
+        // 获取总数
+        let total: i64 = if use_relevance_sort {
+            let fts_query = fts_query_value
+                .as_ref()
+                .expect("fts_query_value should exist when use_relevance_sort");
+            let mut params_refs: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(params_vec.len() + 1);
+            params_refs.push(fts_query);
+            params_refs.extend(params_vec.iter().map(|p| p.as_ref()));
+            conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?
+        } else {
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                params_vec.iter().map(|p| p.as_ref()).collect();
+            conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?
+        };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = conn.prepare(&data_sql)?;
-        let photos: Vec<Photo> = stmt
-            .query_map(params_refs.as_slice(), row_to_photo)?
-            .filter_map(|r| r.ok())
-            .collect();
+        // 添加分页参数并查询数据
+        let photos: Vec<Photo> = if use_relevance_sort {
+            let fts_query = fts_query_value
+                .expect("fts_query_value should exist when use_relevance_sort");
+            let page_size = pagination.page_size as i64;
+            let offset_value = offset;
+            let mut params_refs: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(params_vec.len() + 3);
+            params_refs.push(&fts_query);
+            params_refs.extend(params_vec.iter().map(|p| p.as_ref()));
+            params_refs.push(&page_size);
+            params_refs.push(&offset_value);
+
+            let mut stmt = conn.prepare(&data_sql)?;
+            let rows = stmt.query_map(params_refs.as_slice(), row_to_photo)?;
+            let collected: Vec<Photo> = rows.filter_map(|r| r.ok()).collect();
+            collected
+        } else {
+            params_vec.push(Box::new(pagination.page_size as i64));
+            params_vec.push(Box::new(offset));
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                params_vec.iter().map(|p| p.as_ref()).collect();
+            let mut stmt = conn.prepare(&data_sql)?;
+            let rows = stmt.query_map(params_refs.as_slice(), row_to_photo)?;
+            let collected: Vec<Photo> = rows.filter_map(|r| r.ok()).collect();
+            collected
+        };
 
         Ok(PaginatedResult::new(photos, total, pagination))
     }
@@ -727,63 +972,86 @@ impl Database {
 
         let mut base_where_clauses: Vec<String> = Vec::new();
         let mut base_params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        let mut has_fts_query = false;
+        let mut fts_query_value: Option<String> = None;
 
         // 排除已删除的照片
-        base_where_clauses.push("is_deleted = 0".to_string());
+        base_where_clauses.push("p.is_deleted = 0".to_string());
 
-        // 全文搜索查询
+        // 全文搜索查询 - 使用查询解析器
         if let Some(ref query) = filters.query {
             if !query.trim().is_empty() {
-                base_where_clauses.push(
-                    "photo_id IN (SELECT rowid FROM photos_fts WHERE photos_fts MATCH ?)".to_string(),
+                let parsed = QueryParser::parse(query);
+
+                // 应用 FTS5 查询
+                if let Some(fts_query) = parsed.fts_query {
+                    has_fts_query = true;
+                    fts_query_value = Some(fts_query);
+                }
+
+                // 应用字段过滤条件
+                Self::apply_field_filters_with_alias(
+                    &parsed.field_filters,
+                    &mut base_where_clauses,
+                    &mut base_params_vec,
+                    "p",
                 );
-                // 为 FTS5 转义特殊字符，并添加前缀匹配
-                let fts_query = format!("{}*", query.replace('\"', "\"\""));
-                base_params_vec.push(Box::new(fts_query));
+
+                // 应用标签名称过滤
+                if !parsed.tag_names.is_empty() {
+                    let placeholders: Vec<String> = parsed.tag_names.iter().map(|_| "?".to_string()).collect();
+                    base_where_clauses.push(format!(
+                        "p.photo_id IN (SELECT DISTINCT pt.photo_id FROM photo_tags pt JOIN tags t ON pt.tag_id = t.tag_id WHERE t.tag_name IN ({}))",
+                        placeholders.join(", ")
+                    ));
+                    for tag_name in &parsed.tag_names {
+                        base_params_vec.push(Box::new(tag_name.clone()));
+                    }
+                }
             }
         }
 
         // 日期范围过滤
         if let Some(ref date_from) = filters.date_from {
-            base_where_clauses.push("date_taken >= ?".to_string());
+            base_where_clauses.push("p.date_taken >= ?".to_string());
             base_params_vec.push(Box::new(date_from.clone()));
         }
         if let Some(ref date_to) = filters.date_to {
-            base_where_clauses.push("date_taken <= ?".to_string());
+            base_where_clauses.push("p.date_taken <= ?".to_string());
             base_params_vec.push(Box::new(date_to.clone()));
         }
 
         // 相机型号过滤
         if let Some(ref camera_model) = filters.camera_model {
-            base_where_clauses.push("camera_model LIKE ?".to_string());
+            base_where_clauses.push("p.camera_model LIKE ?".to_string());
             base_params_vec.push(Box::new(format!("%{}%", camera_model)));
         }
 
         // 镜头型号过滤
         if let Some(ref lens_model) = filters.lens_model {
-            base_where_clauses.push("lens_model LIKE ?".to_string());
+            base_where_clauses.push("p.lens_model LIKE ?".to_string());
             base_params_vec.push(Box::new(format!("%{}%", lens_model)));
         }
 
         // 评分过滤
         if let Some(min_rating) = filters.min_rating {
-            base_where_clauses.push("rating >= ?".to_string());
+            base_where_clauses.push("p.rating >= ?".to_string());
             base_params_vec.push(Box::new(min_rating));
         }
         if let Some(max_rating) = filters.max_rating {
-            base_where_clauses.push("rating <= ?".to_string());
+            base_where_clauses.push("p.rating <= ?".to_string());
             base_params_vec.push(Box::new(max_rating));
         }
 
         // 收藏过滤
         if filters.favorites_only == Some(true) {
-            base_where_clauses.push("is_favorite = 1".to_string());
+            base_where_clauses.push("p.is_favorite = 1".to_string());
         }
 
         // GPS 过滤
         if filters.has_gps == Some(true) {
             base_where_clauses.push(
-                "gps_latitude IS NOT NULL AND gps_longitude IS NOT NULL".to_string(),
+                "p.gps_latitude IS NOT NULL AND p.gps_longitude IS NOT NULL".to_string(),
             );
         }
 
@@ -792,7 +1060,7 @@ impl Database {
             if !extensions.is_empty() {
                 let placeholders: Vec<String> = extensions.iter().map(|_| "?".to_string()).collect();
                 base_where_clauses.push(format!(
-                    "LOWER(format) IN ({})",
+                    "LOWER(p.format) IN ({})",
                     placeholders.join(", ")
                 ));
                 for ext in extensions {
@@ -806,7 +1074,7 @@ impl Database {
             if !tag_ids.is_empty() {
                 let placeholders: Vec<String> = tag_ids.iter().map(|_| "?".to_string()).collect();
                 base_where_clauses.push(format!(
-                    "photo_id IN (SELECT DISTINCT photo_id FROM photo_tags WHERE tag_id IN ({}))",
+                    "p.photo_id IN (SELECT DISTINCT photo_id FROM photo_tags WHERE tag_id IN ({}))",
                     placeholders.join(", ")
                 ));
                 for tag_id in tag_ids {
@@ -818,19 +1086,85 @@ impl Database {
         // 相册过滤
         if let Some(album_id) = filters.album_id {
             base_where_clauses.push(
-                "photo_id IN (SELECT photo_id FROM album_photos WHERE album_id = ?)".to_string(),
+                "p.photo_id IN (SELECT photo_id FROM album_photos WHERE album_id = ?)".to_string(),
             );
             base_params_vec.push(Box::new(album_id));
         }
 
-        let base_where_sql = format!("WHERE {}", base_where_clauses.join(" AND "));
+        // ========== EXIF 过滤 ==========
+        if let Some(iso_min) = filters.iso_min {
+            base_where_clauses.push("p.iso >= ?".to_string());
+            base_params_vec.push(Box::new(iso_min));
+        }
+        if let Some(iso_max) = filters.iso_max {
+            base_where_clauses.push("p.iso <= ?".to_string());
+            base_params_vec.push(Box::new(iso_max));
+        }
+        if let Some(aperture_min) = filters.aperture_min {
+            base_where_clauses.push("p.aperture >= ?".to_string());
+            base_params_vec.push(Box::new(aperture_min));
+        }
+        if let Some(aperture_max) = filters.aperture_max {
+            base_where_clauses.push("p.aperture <= ?".to_string());
+            base_params_vec.push(Box::new(aperture_max));
+        }
+        if let Some(focal_min) = filters.focal_length_min {
+            base_where_clauses.push("p.focal_length >= ?".to_string());
+            base_params_vec.push(Box::new(focal_min));
+        }
+        if let Some(focal_max) = filters.focal_length_max {
+            base_where_clauses.push("p.focal_length <= ?".to_string());
+            base_params_vec.push(Box::new(focal_max));
+        }
+        if let Some(ref shutter) = filters.shutter_speed {
+            base_where_clauses.push("p.shutter_speed = ?".to_string());
+            base_params_vec.push(Box::new(shutter.clone()));
+        }
+
+        // 判断是否使用相关性排序
+        let use_relevance_sort = sort.field.is_relevance() && has_fts_query;
+        let effective_sort = if sort.field.is_relevance() && !has_fts_query {
+            PhotoSortOptions {
+                field: PhotoSortField::DateTaken,
+                order: sort.order,
+            }
+        } else {
+            sort.clone()
+        };
+
+        // 非相关性排序时，将 FTS 条件合并进 WHERE
+        if !use_relevance_sort {
+            if let Some(fts_query) = fts_query_value.take() {
+                base_where_clauses.push(
+                    "p.photo_id IN (SELECT rowid FROM photos_fts WHERE photos_fts MATCH ?)".to_string(),
+                );
+                base_params_vec.push(Box::new(fts_query));
+            }
+        }
+
+        let base_where_sql = base_where_clauses.join(" AND ");
 
         // 总数（不包含游标过滤）
         let total: Option<i64> = if include_total {
-            let count_sql = format!("SELECT COUNT(*) FROM photos {}", base_where_sql);
-            let params_refs: Vec<&dyn rusqlite::ToSql> =
-                base_params_vec.iter().map(|p| p.as_ref()).collect();
-            Some(conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?)
+            if use_relevance_sort {
+                let count_sql = format!(
+                    "SELECT COUNT(*) FROM photos p JOIN photos_fts ON p.photo_id = photos_fts.rowid WHERE photos_fts MATCH ? AND {}",
+                    base_where_sql
+                );
+                let fts_query = fts_query_value
+                    .as_ref()
+                    .expect("fts_query_value should exist when use_relevance_sort");
+                let mut params_refs: Vec<&dyn rusqlite::ToSql> =
+                    Vec::with_capacity(base_params_vec.len() + 1);
+                params_refs.push(fts_query);
+                params_refs.extend(base_params_vec.iter().map(|p| p.as_ref()));
+                Some(conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?)
+            } else {
+                let count_sql = format!("SELECT COUNT(*) FROM photos p WHERE {}", base_where_sql);
+                let params_refs: Vec<&dyn rusqlite::ToSql> =
+                    base_params_vec.iter().map(|p| p.as_ref()).collect();
+                Some(conn.query_row(&count_sql, params_refs.as_slice(), |row| row.get(0))?)
+            }
         } else {
             None
         };
@@ -839,32 +1173,69 @@ impl Database {
         let mut data_where_clauses = base_where_clauses;
         let mut data_params_vec = base_params_vec;
         if let Some(cursor) = cursor {
-            let condition = build_cursor_condition(sort.field.as_column(), sort, cursor)?;
+            let sort_column = if use_relevance_sort {
+                "bm25(photos_fts)"
+            } else {
+                effective_sort.field.as_column()
+            };
+            let condition = build_cursor_condition(sort_column, &effective_sort, cursor, "p.photo_id")?;
             data_where_clauses.push(condition.sql);
             data_params_vec.extend(condition.params);
         }
-        let data_where_sql = format!("WHERE {}", data_where_clauses.join(" AND "));
+        let data_where_sql = data_where_clauses.join(" AND ");
 
         let order_sql = format!(
-            "ORDER BY {} {} NULLS LAST, photo_id {}",
-            sort.field.as_column(),
-            sort.order.as_sql(),
-            sort.order.as_sql()
+            "ORDER BY {} {} NULLS LAST, p.photo_id {}",
+            if use_relevance_sort {
+                "bm25(photos_fts)"
+            } else {
+                effective_sort.field.as_column()
+            },
+            effective_sort.order.as_sql(),
+            effective_sort.order.as_sql()
         );
 
-        let data_sql = format!(
-            "SELECT * FROM photos {} {} LIMIT ?",
-            data_where_sql, order_sql
-        );
+        let data_sql = if use_relevance_sort {
+            format!(
+                r#"SELECT p.*, bm25(photos_fts) as relevance_score
+                   FROM photos p
+                   JOIN photos_fts ON p.photo_id = photos_fts.rowid
+                   WHERE photos_fts MATCH ? AND {}
+                   {} LIMIT ?"#,
+                data_where_sql,
+                order_sql
+            )
+        } else {
+            format!(
+                "SELECT p.* FROM photos p WHERE {} {} LIMIT ?",
+                data_where_sql, order_sql
+            )
+        };
 
-        data_params_vec.push(Box::new(limit as i64));
-        let params_refs: Vec<&dyn rusqlite::ToSql> =
-            data_params_vec.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = conn.prepare(&data_sql)?;
-        let photos: Vec<Photo> = stmt
-            .query_map(params_refs.as_slice(), row_to_photo)?
-            .filter_map(|r| r.ok())
-            .collect();
+        let photos: Vec<Photo> = if use_relevance_sort {
+            let fts_query = fts_query_value
+                .as_ref()
+                .expect("fts_query_value should exist when use_relevance_sort");
+            let limit_param = limit as i64;
+            let mut params_refs: Vec<&dyn rusqlite::ToSql> =
+                Vec::with_capacity(data_params_vec.len() + 2);
+            params_refs.push(fts_query);
+            params_refs.extend(data_params_vec.iter().map(|p| p.as_ref()));
+            params_refs.push(&limit_param);
+
+            let mut stmt = conn.prepare(&data_sql)?;
+            let rows = stmt.query_map(params_refs.as_slice(), row_to_photo)?;
+            let collected: Vec<Photo> = rows.filter_map(|r| r.ok()).collect();
+            collected
+        } else {
+            data_params_vec.push(Box::new(limit as i64));
+            let params_refs: Vec<&dyn rusqlite::ToSql> =
+                data_params_vec.iter().map(|p| p.as_ref()).collect();
+            let mut stmt = conn.prepare(&data_sql)?;
+            let rows = stmt.query_map(params_refs.as_slice(), row_to_photo)?;
+            let collected: Vec<Photo> = rows.filter_map(|r| r.ok()).collect();
+            collected
+        };
 
         Ok((photos, total))
     }
@@ -1431,6 +1802,211 @@ impl Database {
 
         Ok(count)
     }
+
+    // ==================== 搜索建议 ====================
+
+    /// 获取搜索建议
+    ///
+    /// 根据前缀返回匹配的文件名、相机型号、镜头型号和标签
+    pub fn get_search_suggestions(&self, prefix: &str, limit: u32) -> AppResult<Vec<SearchSuggestion>> {
+        if prefix.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let conn = self.connection()?;
+        let pattern = format!("{}%", prefix.to_lowercase());
+        let mut suggestions = Vec::new();
+
+        // 1. 文件名建议
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT file_name FROM photos WHERE is_deleted = 0 AND LOWER(file_name) LIKE ?1 LIMIT ?2"
+        )?;
+        let file_names: Vec<String> = stmt
+            .query_map(params![pattern, limit], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        for name in file_names {
+            suggestions.push(SearchSuggestion {
+                suggestion_type: "file".to_string(),
+                text: name.clone(),
+                label: Some("文件".to_string()),
+            });
+        }
+
+        // 2. 相机型号建议
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT camera_model FROM photos WHERE is_deleted = 0 AND camera_model IS NOT NULL AND LOWER(camera_model) LIKE ?1 LIMIT ?2"
+        )?;
+        let cameras: Vec<String> = stmt
+            .query_map(params![pattern, limit], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        for camera in cameras {
+            suggestions.push(SearchSuggestion {
+                suggestion_type: "camera".to_string(),
+                text: format!("camera:{}", camera),
+                label: Some("相机".to_string()),
+            });
+        }
+
+        // 3. 镜头型号建议
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT lens_model FROM photos WHERE is_deleted = 0 AND lens_model IS NOT NULL AND LOWER(lens_model) LIKE ?1 LIMIT ?2"
+        )?;
+        let lenses: Vec<String> = stmt
+            .query_map(params![pattern, limit], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        for lens in lenses {
+            suggestions.push(SearchSuggestion {
+                suggestion_type: "lens".to_string(),
+                text: format!("lens:{}", lens),
+                label: Some("镜头".to_string()),
+            });
+        }
+
+        // 4. 标签建议
+        let mut stmt = conn.prepare(
+            "SELECT tag_name FROM tags WHERE LOWER(tag_name) LIKE ?1 LIMIT ?2"
+        )?;
+        let tags: Vec<String> = stmt
+            .query_map(params![pattern, limit], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        for tag in tags {
+            suggestions.push(SearchSuggestion {
+                suggestion_type: "tag".to_string(),
+                text: format!("tag:{}", tag),
+                label: Some("标签".to_string()),
+            });
+        }
+
+        // 限制总数
+        suggestions.truncate(limit as usize);
+        Ok(suggestions)
+    }
+
+    // ==================== OCR 功能 ====================
+
+    /// 更新照片的 OCR 文字
+    pub fn update_photo_ocr(&self, photo_id: i64, ocr_text: Option<&str>, status: i32) -> AppResult<bool> {
+        let conn = self.connection()?;
+        let now = crate::models::photo::chrono_now_pub();
+
+        let rows = conn.execute(
+            "UPDATE photos SET ocr_text = ?1, ocr_status = ?2, ocr_processed_at = ?3, date_modified = ?3 WHERE photo_id = ?4",
+            params![ocr_text, status, now, photo_id],
+        )?;
+
+        Ok(rows > 0)
+    }
+
+    /// 获取待 OCR 处理的照片
+    pub fn get_photos_pending_ocr(&self, limit: u32) -> AppResult<Vec<Photo>> {
+        let conn = self.connection()?;
+
+        let mut stmt = conn.prepare(
+            "SELECT * FROM photos WHERE is_deleted = 0 AND ocr_status = 0 ORDER BY date_added DESC LIMIT ?1"
+        )?;
+
+        let photos: Vec<Photo> = stmt
+            .query_map(params![limit], row_to_photo)?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(photos)
+    }
+
+    /// 获取 OCR 统计信息
+    pub fn get_ocr_stats(&self) -> AppResult<OcrStats> {
+        let conn = self.connection()?;
+
+        let total_photos: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM photos WHERE is_deleted = 0",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let pending: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM photos WHERE is_deleted = 0 AND ocr_status = 0",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let processed: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM photos WHERE is_deleted = 0 AND ocr_status = 1",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let failed: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM photos WHERE is_deleted = 0 AND ocr_status = 2",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let no_text: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM photos WHERE is_deleted = 0 AND ocr_status = 3",
+            [],
+            |row| row.get(0),
+        )?;
+
+        Ok(OcrStats {
+            total_photos,
+            pending,
+            processed,
+            failed,
+            no_text,
+        })
+    }
+
+    /// 重置所有照片的 OCR 状态（用于重新处理）
+    pub fn reset_ocr_status(&self) -> AppResult<usize> {
+        let conn = self.connection()?;
+        let rows = conn.execute(
+            "UPDATE photos SET ocr_status = 0, ocr_text = NULL, ocr_processed_at = NULL WHERE is_deleted = 0",
+            [],
+        )?;
+        Ok(rows)
+    }
+
+    /// 重置失败的 OCR 状态（用于重试）
+    pub fn reset_failed_ocr(&self) -> AppResult<usize> {
+        let conn = self.connection()?;
+        let rows = conn.execute(
+            "UPDATE photos SET ocr_status = 0, ocr_processed_at = NULL WHERE is_deleted = 0 AND ocr_status = 2",
+            [],
+        )?;
+        Ok(rows)
+    }
+}
+
+/// OCR 统计信息
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrStats {
+    /// 总照片数
+    pub total_photos: i64,
+    /// 待处理数
+    pub pending: i64,
+    /// 已处理数
+    pub processed: i64,
+    /// 失败数
+    pub failed: i64,
+    /// 无文字数
+    pub no_text: i64,
+}
+
+/// 搜索建议项
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchSuggestion {
+    /// 建议类型: file, camera, lens, tag
+    pub suggestion_type: String,
+    /// 建议文本
+    pub text: String,
+    /// 显示标签
+    pub label: Option<String>,
 }
 
 #[cfg(test)]

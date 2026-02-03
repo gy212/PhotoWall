@@ -42,3 +42,9 @@ export * from './blur';
 
 // 照片编辑
 export * from './editor';
+
+// 智能相册
+export * from './smartAlbums';
+
+// OCR 文字识别
+export * from './ocr';

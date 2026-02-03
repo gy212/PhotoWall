@@ -14,9 +14,15 @@ import {
   startAutoScan,
   stopAutoScan,
   resetDirectoryScanFrequency,
+  checkOcrAvailable,
+  getOcrStats,
+  getOcrProgress,
+  startOcrProcessing,
+  stopOcrProcessing,
+  resetFailedOcr,
 } from '@/services/api';
 import type { SyncFolder, AutoScanStatus, DirectoryScanState } from '@/services/api';
-import type { AppSettings } from '@/types';
+import type { AppSettings, OcrStats, OcrProgress } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Icon, IconName } from '@/components/common/Icon';
 
@@ -25,6 +31,7 @@ const settingsSections = [
   { id: 'sync', label: '文件夹同步', icon: 'folder_managed' },
   { id: 'appearance', label: '外观', icon: 'contrast' },
   { id: 'scan', label: '照片扫描', icon: 'image_search' },
+  { id: 'ocr', label: '文字识别', icon: 'text_fields' },
   { id: 'thumbnail', label: '缩略图', icon: 'photo_size_select_large' },
   { id: 'performance', label: '性能', icon: 'speed' },
 ];
@@ -84,6 +91,10 @@ function SettingsPage() {
   const [activeSection, setActiveSection] = useState('sync');
   const [autoScanStatus, setAutoScanStatus] = useState<AutoScanStatus | null>(null);
   const [directoryScanStates, setDirectoryScanStates] = useState<DirectoryScanState[]>([]);
+  const [ocrAvailable, setOcrAvailable] = useState<boolean | null>(null);
+  const [ocrStats, setOcrStats] = useState<OcrStats | null>(null);
+  const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
 
   // Store actions
   const {
@@ -105,6 +116,7 @@ function SettingsPage() {
     void loadSettings();
     void loadSyncFolders();
     void loadAutoScanStatus();
+    void loadOcrStatus();
   }, []);
 
   // Sync hue from themeColor when loaded
@@ -202,6 +214,72 @@ function SettingsPage() {
       setDirectoryScanStates(states);
     } catch (err) {
       console.error('加载自动扫描状态失败:', err);
+    }
+  };
+
+  const loadOcrStatus = async () => {
+    try {
+      const [available, stats, progress] = await Promise.all([
+        checkOcrAvailable(),
+        getOcrStats(),
+        getOcrProgress(),
+      ]);
+      setOcrAvailable(available);
+      setOcrStats(stats);
+      setOcrProgress(progress);
+      setOcrProcessing(progress.isRunning);
+    } catch (err) {
+      console.error('加载 OCR 状态失败:', err);
+      setOcrAvailable(false);
+    }
+  };
+
+  const handleStartOcr = async () => {
+    try {
+      setOcrProcessing(true);
+      const progress = await startOcrProcessing();
+      setOcrProgress(progress);
+      showMessage('success', 'OCR 处理已启动');
+      // 定期刷新进度
+      const interval = setInterval(async () => {
+        try {
+          const newProgress = await getOcrProgress();
+          setOcrProgress(newProgress);
+          if (!newProgress.isRunning) {
+            clearInterval(interval);
+            setOcrProcessing(false);
+            await loadOcrStatus();
+            showMessage('success', 'OCR 处理完成');
+          }
+        } catch {
+          clearInterval(interval);
+          setOcrProcessing(false);
+        }
+      }, 2000);
+    } catch (err) {
+      setOcrProcessing(false);
+      showMessage('error', `启动 OCR 失败: ${err}`);
+    }
+  };
+
+  const handleStopOcr = async () => {
+    try {
+      await stopOcrProcessing();
+      setOcrProcessing(false);
+      await loadOcrStatus();
+      showMessage('success', 'OCR 处理已停止');
+    } catch (err) {
+      showMessage('error', `停止 OCR 失败: ${err}`);
+    }
+  };
+
+  const handleResetFailedOcr = async () => {
+    try {
+      const count = await resetFailedOcr();
+      await loadOcrStatus();
+      showMessage('success', `已重置 ${count} 张失败的照片`);
+    } catch (err) {
+      showMessage('error', `重置失败: ${err}`);
     }
   };
 
@@ -517,23 +595,23 @@ function SettingsPage() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-base font-medium text-primary">主题模式</p>
-                    <div className="flex bg-surface p-1 rounded-xl border border-border">
+                    <div className="flex w-full max-w-[320px] items-center rounded-full border border-border bg-surface p-1 shadow-sm">
                       {(['light', 'system', 'dark'] as const).map((mode) => (
                         <button
                           key={mode}
                           onClick={() => setTheme(mode)}
                           className={clsx(
-                            'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
+                            'flex flex-1 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors',
                             theme === mode
                               ? 'bg-primary text-white shadow-sm'
                               : 'text-secondary hover:text-primary hover:bg-hover'
                           )}
                         >
-                          <Icon 
-                            name={mode === 'light' ? 'light_mode' : mode === 'dark' ? 'dark_mode' : 'settings_brightness'} 
-                            className="text-lg"
+                          <Icon
+                            name={mode === 'light' ? 'light_mode' : mode === 'dark' ? 'dark_mode' : 'settings_brightness'}
+                            className="text-base"
                           />
-                          <span className="capitalize">
+                          <span>
                             {mode === 'light' ? '浅色' : mode === 'dark' ? '深色' : '自动'}
                           </span>
                         </button>
@@ -541,7 +619,7 @@ function SettingsPage() {
                     </div>
                   </div>
                   <p className="text-sm text-secondary leading-relaxed">
-                     选择浅色、深色模式或跟随系统设置。深色模式经过专门优化，提供舒适的沉浸式体验。
+                    选择浅色、深色模式或跟随系统设置。深色模式经过专门优化，提供舒适的沉浸式体验。
                   </p>
                 </div>
 
@@ -551,46 +629,49 @@ function SettingsPage() {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-base font-medium text-primary">主题颜色</p>
-                    <span className="text-xs font-mono text-secondary bg-surface px-2 py-1 rounded border border-border uppercase">{themeColor}</span>
+                    <span className="text-xs font-mono text-secondary bg-surface px-2 py-1 rounded border border-border uppercase">
+                      {themeColor}
+                    </span>
                   </div>
-                  
+
                   {/* Hue Slider */}
-                  <div className="relative h-10 w-full rounded-2xl p-1 border border-outline/10 bg-surface shadow-inner mb-6">
-                      <input
-                        type="range"
-                        min="0"
-                        max="360"
-                        value={hue}
-                        onChange={(e) => handleHueChange(parseInt(e.target.value))}
-                        className="w-full h-full appearance-none bg-transparent rounded-xl cursor-pointer z-10 relative"
-                        style={{
-                            background: 'linear-gradient(to right, #f87171, #fb923c, #fbbf24, #a3e635, #4ade80, #2dd4bf, #22d3ee, #38bdf8, #60a5fa, #818cf8, #a78bfa, #c084fc, #e879f9, #f472b6, #f87171)'
-                        }}
-                      />
+                  <div className="relative h-9 w-full rounded-full p-1 border border-primary/35 bg-surface shadow-inner mb-6">
+                    <input
+                      type="range"
+                      min="0"
+                      max="360"
+                      value={hue}
+                      onChange={(e) => handleHueChange(parseInt(e.target.value))}
+                      className="hue-slider w-full h-full cursor-pointer rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(to right, #f87171, #fb923c, #fbbf24, #a3e635, #4ade80, #2dd4bf, #22d3ee, #38bdf8, #60a5fa, #818cf8, #a78bfa, #c084fc, #e879f9, #f472b6, #f87171)',
+                      }}
+                    />
                   </div>
 
                   {/* Preview Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="p-4 rounded-xl border border-border bg-surface flex flex-col gap-2 transition-colors">
-                          <div className="h-2 w-12 rounded-full bg-primary/20"></div>
-                          <div className="h-8 w-8 rounded-lg bg-primary"></div>
-                          <div className="h-2 w-20 rounded-full bg-secondary/20"></div>
+                    <div className="p-4 rounded-xl border border-border bg-surface flex flex-col gap-3 transition-colors">
+                      <div className="h-2 w-12 rounded-full bg-secondary/20" />
+                      <div className="h-10 w-10 rounded-xl bg-primary/80" />
+                      <div className="h-2 w-20 rounded-full bg-secondary/15" />
+                    </div>
+                    <div className="p-4 rounded-xl border border-border bg-surface flex items-center justify-between transition-colors">
+                      <div className="flex flex-col gap-2">
+                        <div className="h-2 w-16 rounded-full bg-primary/80" />
+                        <div className="h-2 w-12 rounded-full bg-secondary/15" />
                       </div>
-                      <div className="p-4 rounded-xl border border-border bg-surface flex items-center justify-between transition-colors">
-                          <div className="flex flex-col gap-2">
-                              <div className="h-2 w-16 rounded-full bg-primary"></div>
-                              <div className="h-2 w-10 rounded-full bg-secondary/20"></div>
-                          </div>
-                          <div className="h-6 w-6 rounded-full border-2 border-primary"></div>
-                      </div>
-                      <div className="p-4 rounded-xl bg-primary text-white flex flex-col justify-center items-center gap-2 transition-colors">
-                          <Icon name="check_circle" className="text-2xl" />
-                          <span className="text-xs font-medium opacity-90">Active</span>
-                      </div>
-                      <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex items-center gap-3 transition-colors">
-                          <Icon name="palette" className="text-primary text-xl" />
-                          <span className="text-sm font-medium text-primary">Accent</span>
-                      </div>
+                      <div className="h-7 w-7 rounded-full border-2 border-primary/70 bg-surface" />
+                    </div>
+                    <div className="p-4 rounded-xl bg-primary text-white flex flex-col justify-center items-center gap-2 transition-colors">
+                      <Icon name="check_circle" className="text-2xl" />
+                      <span className="text-xs font-medium opacity-90">Active</span>
+                    </div>
+                    <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 flex items-center justify-center gap-3 transition-colors">
+                      <Icon name="palette" className="text-primary text-xl" />
+                      <span className="text-sm font-medium text-primary">Accent</span>
+                    </div>
                   </div>
                   
                   <p className="mt-6 text-xs text-secondary leading-relaxed">
@@ -806,6 +887,156 @@ function SettingsPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </section>
+
+            {/* OCR 文字识别 */}
+            <section
+              ref={(el) => { sectionRefs.current['ocr'] = el; }}
+              className="card p-6 rounded-2xl"
+            >
+              <h3 className="text-lg font-semibold text-primary">文字识别 (OCR)</h3>
+              <p className="text-sm text-secondary mb-4">
+                识别照片中的文字，支持通过文字内容搜索照片。
+              </p>
+
+              {/* OCR 可用性状态 */}
+              <div className="mb-6 p-4 rounded-xl bg-surface border border-border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Icon
+                      name={ocrAvailable ? 'check_circle' : 'error'}
+                      className={clsx(
+                        'text-2xl',
+                        ocrAvailable ? 'text-green-500' : 'text-red-500'
+                      )}
+                    />
+                    <div>
+                      <p className="font-medium text-primary">
+                        Tesseract OCR {ocrAvailable ? '已安装' : '未安装'}
+                      </p>
+                      <p className="text-sm text-secondary">
+                        {ocrAvailable
+                          ? '可以识别照片中的中英文文字'
+                          : '请安装 Tesseract OCR 以启用文字识别功能'}
+                      </p>
+                    </div>
+                  </div>
+                  {!ocrAvailable && (
+                    <a
+                      href="https://github.com/UB-Mannheim/tesseract/wiki"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary h-9 px-4 gap-2"
+                    >
+                      <Icon name="open_in_new" className="text-lg" />
+                      <span>下载安装</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* OCR 统计信息 */}
+              {ocrAvailable && ocrStats && (
+                <div className="mb-6">
+                  <p className="text-sm font-medium text-primary mb-3">处理统计</p>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="p-3 rounded-lg bg-surface border border-border text-center">
+                      <p className="text-2xl font-semibold text-primary">{ocrStats.totalPhotos}</p>
+                      <p className="text-xs text-secondary">总照片</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-surface border border-border text-center">
+                      <p className="text-2xl font-semibold text-yellow-500">{ocrStats.pending}</p>
+                      <p className="text-xs text-secondary">待处理</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-surface border border-border text-center">
+                      <p className="text-2xl font-semibold text-green-500">{ocrStats.processed}</p>
+                      <p className="text-xs text-secondary">已处理</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-surface border border-border text-center">
+                      <p className="text-2xl font-semibold text-red-500">{ocrStats.failed}</p>
+                      <p className="text-xs text-secondary">失败</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-surface border border-border text-center">
+                      <p className="text-2xl font-semibold text-secondary">{ocrStats.noText}</p>
+                      <p className="text-xs text-secondary">无文字</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* OCR 处理进度 */}
+              {ocrAvailable && ocrProcessing && ocrProgress && (
+                <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-medium text-primary">正在处理...</p>
+                    <span className="text-sm text-secondary">
+                      {ocrProgress.processed} / {ocrProgress.total}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-secondary/20 overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{
+                        width: `${ocrProgress.total > 0 ? (ocrProgress.processed / ocrProgress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  {ocrProgress.failed > 0 && (
+                    <p className="mt-2 text-xs text-red-500">
+                      {ocrProgress.failed} 张处理失败
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* OCR 操作按钮 */}
+              {ocrAvailable && (
+                <div className="flex flex-wrap gap-3">
+                  {ocrProcessing ? (
+                    <button
+                      type="button"
+                      onClick={handleStopOcr}
+                      className="btn btn-secondary h-9 px-4 gap-2"
+                    >
+                      <Icon name="stop" className="text-lg" />
+                      <span>停止处理</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartOcr}
+                      disabled={!ocrStats || ocrStats.pending === 0}
+                      className="btn btn-primary h-9 px-4 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Icon name="play_arrow" className="text-lg" />
+                      <span>
+                        {ocrStats && ocrStats.pending > 0
+                          ? `开始处理 (${ocrStats.pending} 张)`
+                          : '没有待处理的照片'}
+                      </span>
+                    </button>
+                  )}
+                  {ocrStats && ocrStats.failed > 0 && !ocrProcessing && (
+                    <button
+                      type="button"
+                      onClick={handleResetFailedOcr}
+                      className="btn btn-secondary h-9 px-4 gap-2"
+                    >
+                      <Icon name="refresh" className="text-lg" />
+                      <span>重试失败 ({ocrStats.failed})</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* 使用说明 */}
+              <div className="mt-6 p-4 rounded-xl bg-surface/50 border border-border">
+                <p className="text-sm text-secondary leading-relaxed">
+                  <Icon name="info" className="text-base align-middle mr-1" />
+                  OCR 处理完成后，您可以在搜索框中直接输入照片中的文字来搜索照片。
+                  例如：搜索"咖啡"可以找到拍摄了咖啡店招牌的照片。
+                </p>
               </div>
             </section>
 

@@ -4,6 +4,7 @@
 
 use rusqlite::{Connection, OpenFlags};
 use std::path::PathBuf;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::utils::error::{AppError, AppResult};
@@ -116,6 +117,182 @@ impl Database {
         } else {
             // 检查并执行迁移
             self.migrate_internal(&conn)?;
+        }
+
+        // 修复历史版本可能缺失的字段（例如 scan_directories 扩展列）
+        self.ensure_scan_directories_schema(&conn)?;
+        self.ensure_ocr_schema(&conn)?;
+
+        Ok(())
+    }
+
+    /// 确保 scan_directories 表包含所有需要的列（兼容旧数据库）
+    fn ensure_scan_directories_schema(&self, conn: &Connection) -> AppResult<()> {
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='scan_directories'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if !table_exists {
+            return Ok(());
+        }
+
+        let mut stmt = conn.prepare("PRAGMA table_info(scan_directories)")?;
+        let columns_iter = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        let mut columns = HashSet::new();
+        for col in columns_iter {
+            if let Ok(name) = col {
+                columns.insert(name);
+            }
+        }
+
+        let mut statements: Vec<&'static str> = Vec::new();
+        if !columns.contains("last_change_time") {
+            statements.push("ALTER TABLE scan_directories ADD COLUMN last_change_time TEXT");
+        }
+        if !columns.contains("no_change_count") {
+            statements.push("ALTER TABLE scan_directories ADD COLUMN no_change_count INTEGER DEFAULT 0");
+        }
+        if !columns.contains("scan_multiplier") {
+            statements.push("ALTER TABLE scan_directories ADD COLUMN scan_multiplier INTEGER DEFAULT 1");
+        }
+        if !columns.contains("next_scan_time") {
+            statements.push("ALTER TABLE scan_directories ADD COLUMN next_scan_time TEXT");
+        }
+        if !columns.contains("file_count") {
+            statements.push("ALTER TABLE scan_directories ADD COLUMN file_count INTEGER DEFAULT 0");
+        }
+
+        for sql in statements {
+            conn.execute(sql, [])?;
+        }
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_scan_directories_next_scan ON scan_directories(next_scan_time)",
+            [],
+        )?;
+
+        Ok(())
+    }
+
+    /// 确保 photos 表包含 OCR 相关字段，并同步 FTS 索引
+    fn ensure_ocr_schema(&self, conn: &Connection) -> AppResult<()> {
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='photos'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if !table_exists {
+            return Ok(());
+        }
+
+        let mut stmt = conn.prepare("PRAGMA table_info(photos)")?;
+        let columns_iter = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        let mut columns = HashSet::new();
+        for col in columns_iter {
+            if let Ok(name) = col {
+                columns.insert(name);
+            }
+        }
+
+        let mut statements: Vec<&'static str> = Vec::new();
+        if !columns.contains("ocr_text") {
+            statements.push("ALTER TABLE photos ADD COLUMN ocr_text TEXT");
+        }
+        if !columns.contains("ocr_status") {
+            statements.push("ALTER TABLE photos ADD COLUMN ocr_status INTEGER DEFAULT 0");
+        }
+        if !columns.contains("ocr_processed_at") {
+            statements.push("ALTER TABLE photos ADD COLUMN ocr_processed_at TEXT");
+        }
+
+        for sql in statements {
+            conn.execute(sql, [])?;
+        }
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_photos_ocr_status ON photos(ocr_status)",
+            [],
+        )?;
+
+        let fts_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='photos_fts'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        let needs_fts_rebuild = if !fts_exists {
+            true
+        } else {
+            let mut stmt = conn.prepare("PRAGMA table_info(photos_fts)")?;
+            let columns_iter = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            let mut fts_columns = HashSet::new();
+            for col in columns_iter {
+                if let Ok(name) = col {
+                    fts_columns.insert(name);
+                }
+            }
+            !fts_columns.contains("ocr_text")
+        };
+
+        if needs_fts_rebuild {
+            conn.execute_batch(
+                r#"
+                -- 删除旧的触发器
+                DROP TRIGGER IF EXISTS photos_fts_insert;
+                DROP TRIGGER IF EXISTS photos_fts_delete;
+                DROP TRIGGER IF EXISTS photos_fts_update;
+
+                -- 删除旧的 FTS 表
+                DROP TABLE IF EXISTS photos_fts;
+
+                -- 创建包含 OCR 文字的 FTS5 表
+                CREATE VIRTUAL TABLE photos_fts USING fts5(
+                    file_name,
+                    file_path,
+                    camera_model,
+                    lens_model,
+                    format,
+                    shutter_speed,
+                    ocr_text,
+                    content='photos',
+                    content_rowid='photo_id',
+                    tokenize='unicode61 remove_diacritics 2'
+                );
+
+                -- 重建索引数据
+                INSERT INTO photos_fts(rowid, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text)
+                SELECT photo_id, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text FROM photos;
+
+                -- 创建新的触发器：插入时同步 FTS
+                CREATE TRIGGER photos_fts_insert AFTER INSERT ON photos BEGIN
+                    INSERT INTO photos_fts(rowid, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text)
+                    VALUES (NEW.photo_id, NEW.file_name, NEW.file_path, NEW.camera_model, NEW.lens_model, NEW.format, NEW.shutter_speed, NEW.ocr_text);
+                END;
+
+                -- 触发器：删除时同步 FTS
+                CREATE TRIGGER photos_fts_delete AFTER DELETE ON photos BEGIN
+                    INSERT INTO photos_fts(photos_fts, rowid, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text)
+                    VALUES ('delete', OLD.photo_id, OLD.file_name, OLD.file_path, OLD.camera_model, OLD.lens_model, OLD.format, OLD.shutter_speed, OLD.ocr_text);
+                END;
+
+                -- 触发器：更新时同步 FTS
+                CREATE TRIGGER photos_fts_update AFTER UPDATE ON photos BEGIN
+                    INSERT INTO photos_fts(photos_fts, rowid, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text)
+                    VALUES ('delete', OLD.photo_id, OLD.file_name, OLD.file_path, OLD.camera_model, OLD.lens_model, OLD.format, OLD.shutter_speed, OLD.ocr_text);
+                    INSERT INTO photos_fts(rowid, file_name, file_path, camera_model, lens_model, format, shutter_speed, ocr_text)
+                    VALUES (NEW.photo_id, NEW.file_name, NEW.file_path, NEW.camera_model, NEW.lens_model, NEW.format, NEW.shutter_speed, NEW.ocr_text);
+                END;
+                "#,
+            )?;
         }
 
         Ok(())

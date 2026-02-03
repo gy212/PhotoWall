@@ -2,14 +2,17 @@
  * SearchPanel - 搜索面板组件
  *
  * 全屏搜索面板，支持文本搜索和高级过滤器
+ * 支持高级搜索语法：AND/OR/NOT、引号精确匹配、字段限定搜索
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { Icon } from '@/components/common/Icon';
 import { usePhotoStore } from '@/stores/photoStore';
+import { useSearchStore } from '@/stores/searchStore';
 import { getAllTags } from '@/services/api';
+import { SearchSuggestions } from './SearchSuggestions';
 import type { Tag, SearchFilters } from '@/types';
 
 interface SearchPanelProps {
@@ -17,9 +20,24 @@ interface SearchPanelProps {
   onClose: () => void;
 }
 
+/** 搜索语法提示 */
+const SEARCH_SYNTAX_TIPS = [
+  { syntax: '"精确短语"', desc: '精确匹配' },
+  { syntax: 'AND / OR', desc: '布尔运算' },
+  { syntax: 'NOT 关键词', desc: '排除' },
+  { syntax: 'camera:Canon', desc: '相机型号' },
+  { syntax: 'tag:风景', desc: '标签搜索' },
+  { syntax: 'iso:>800', desc: 'ISO 范围' },
+  { syntax: 'rating:>=4', desc: '评分过滤' },
+];
+
 export function SearchPanel({ open, onClose }: SearchPanelProps) {
   const setSearchFilters = usePhotoStore(state => state.setSearchFilters);
   const clearSearchFilters = usePhotoStore(state => state.clearSearchFilters);
+
+  // 搜索历史
+  const { history, addToHistory, getRecentSearches } = useSearchStore();
+  const recentSearches = useMemo(() => getRecentSearches(5), [history]);
 
   // 本地过滤器状态
   const [query, setQuery] = useState('');
@@ -28,6 +46,9 @@ export function SearchPanel({ open, onClose }: SearchPanelProps) {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [minRating, setMinRating] = useState(0);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  // 显示语法提示
+  const [showSyntaxTips, setShowSyntaxTips] = useState(false);
 
   // 标签列表
   const [tags, setTags] = useState<Tag[]>([]);
@@ -74,9 +95,27 @@ export function SearchPanel({ open, onClose }: SearchPanelProps) {
     if (minRating > 0) filters.minRating = minRating;
     if (favoritesOnly) filters.favoritesOnly = true;
 
+    // 保存到搜索历史
+    if (query.trim() || Object.keys(filters).length > 0) {
+      addToHistory({
+        query: query.trim(),
+        filters,
+      });
+    }
+
     setSearchFilters(filters);
     onClose();
-  }, [query, dateFrom, dateTo, selectedTagIds, tags, minRating, favoritesOnly, setSearchFilters, onClose]);
+  }, [query, dateFrom, dateTo, selectedTagIds, tags, minRating, favoritesOnly, setSearchFilters, onClose, addToHistory]);
+
+  // 应用历史搜索
+  const applyHistorySearch = useCallback((historyItem: typeof recentSearches[0]) => {
+    setQuery(historyItem.query);
+    setDateFrom(historyItem.filters.dateFrom ?? '');
+    setDateTo(historyItem.filters.dateTo ?? '');
+    setSelectedTagIds(historyItem.filters.tagIds ?? []);
+    setMinRating(historyItem.filters.minRating ?? 0);
+    setFavoritesOnly(!!historyItem.filters.favoritesOnly);
+  }, []);
 
   // 清除过滤器
   const handleClear = useCallback(() => {
@@ -120,10 +159,22 @@ export function SearchPanel({ open, onClose }: SearchPanelProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索照片..."
+            placeholder="搜索照片... (支持高级语法)"
             className="flex-1 bg-transparent text-xl text-primary placeholder:text-tertiary outline-none"
             autoFocus
           />
+          <button
+            onClick={() => setShowSyntaxTips(!showSyntaxTips)}
+            className={clsx(
+              "p-2 mr-2 rounded-lg transition-colors",
+              showSyntaxTips
+                ? "text-primary bg-primary/10"
+                : "text-tertiary hover:text-secondary hover:bg-element"
+            )}
+            title="搜索语法帮助"
+          >
+            <Icon name="info" className="text-xl" />
+          </button>
           <button
             onClick={onClose}
             className="p-2 text-secondary hover:text-primary hover:bg-element rounded-lg transition-colors"
@@ -131,6 +182,48 @@ export function SearchPanel({ open, onClose }: SearchPanelProps) {
             <Icon name="close" className="text-xl" />
           </button>
         </div>
+
+        {/* 搜索语法提示 */}
+        {showSyntaxTips && (
+          <div className="px-6 py-3 bg-element/50 border-b border-border">
+            <div className="flex flex-wrap gap-3">
+              {SEARCH_SYNTAX_TIPS.map((tip, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-xs">
+                  <code className="px-1.5 py-0.5 bg-surface rounded text-primary font-mono">{tip.syntax}</code>
+                  <span className="text-tertiary">{tip.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 搜索建议 */}
+        <SearchSuggestions
+          query={query}
+          visible={!!query && query.length >= 2}
+          onSelect={(suggestion) => setQuery(suggestion)}
+        />
+
+        {/* 最近搜索 */}
+        {recentSearches.length > 0 && !query && (
+          <div className="px-6 py-3 border-b border-border">
+            <div className="flex items-center gap-2 mb-2">
+              <Icon name="schedule" className="text-sm text-tertiary" />
+              <span className="text-xs font-medium text-tertiary">最近搜索</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {recentSearches.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => applyHistorySearch(item)}
+                  className="px-3 py-1 bg-element hover:bg-hover rounded-full text-sm text-secondary hover:text-primary transition-colors"
+                >
+                  {item.query || '(过滤器搜索)'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 过滤器区域 */}
         <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">

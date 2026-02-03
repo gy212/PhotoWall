@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/photowall-core", "crates/photowall-ffi"]
+resolver = "2"
+
 [package]
 name = "photowall"
 version = "0.1.0"
@@ -15,6 +19,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# PhotoWall Core Library
+photowall-core = { path = "crates/photowall-core" }
+
 # Tauri 框架
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
@@ -107,6 +114,9 @@ fastblur = "0.1"
 
 # Base64 编码（用于占位图传输）
 base64 = "0.22"
+
+# OCR 文字识别（通过命令行调用 Tesseract）
+rusty-tesseract = "1"
 
 [dev-dependencies]
 tempfile = "3"

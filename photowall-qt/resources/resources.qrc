@@ -1,0 +1,34 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="qml/main.qml">../qml/main.qml</file>
+        <file alias="qml/theme/Theme.qml">../qml/theme/Theme.qml</file>
+        <file alias="qml/theme/qmldir">../qml/theme/qmldir</file>
+        <file alias="qml/components/qmldir">../qml/components/qmldir</file>
+        <file alias="qml/components/ContextMenu.qml">../qml/components/ContextMenu.qml</file>
+        <file alias="qml/components/Sidebar.qml">../qml/components/Sidebar.qml</file>
+        <file alias="qml/components/Toolbar.qml">../qml/components/Toolbar.qml</file>
+        <file alias="qml/components/SearchPanel.qml">../qml/components/SearchPanel.qml</file>
+        <file alias="qml/components/PhotoThumbnail.qml">../qml/components/PhotoThumbnail.qml</file>
+        <file alias="qml/components/Icon.qml">../qml/components/Icon.qml</file>
+        <file alias="qml/components/PhotoGrid.qml">../qml/components/PhotoGrid.qml</file>
+        <file alias="qml/components/ThemedScrollBar.qml">../qml/components/ThemedScrollBar.qml</file>
+        <file alias="qml/components/GridBackground.qml">../qml/components/GridBackground.qml</file>
+        <file alias="qml/components/FolderTreeItem.qml">../qml/components/FolderTreeItem.qml</file>
+        <file alias="qml/components/HeroSection.qml">../qml/components/HeroSection.qml</file>
+        <file alias="qml/components/TagRibbon.qml">../qml/components/TagRibbon.qml</file>
+        <file alias="qml/components/ContentShelf.qml">../qml/components/ContentShelf.qml</file>
+        <file alias="qml/components/WindowControls.qml">../qml/components/WindowControls.qml</file>
+        <file alias="qml/dialogs/AlbumManager.qml">../qml/dialogs/AlbumManager.qml</file>
+        <file alias="qml/dialogs/ConfirmDialog.qml">../qml/dialogs/ConfirmDialog.qml</file>
+        <file alias="qml/dialogs/PhotoViewer.qml">../qml/dialogs/PhotoViewer.qml</file>
+        <file alias="qml/dialogs/ScanProgressDialog.qml">../qml/dialogs/ScanProgressDialog.qml</file>
+        <file alias="qml/dialogs/TagManager.qml">../qml/dialogs/TagManager.qml</file>
+        <file alias="qml/pages/AlbumsPage.qml">../qml/pages/AlbumsPage.qml</file>
+        <file alias="qml/pages/FavoritesPage.qml">../qml/pages/FavoritesPage.qml</file>
+        <file alias="qml/pages/FoldersPage.qml">../qml/pages/FoldersPage.qml</file>
+        <file alias="qml/pages/HomePage.qml">../qml/pages/HomePage.qml</file>
+        <file alias="qml/pages/SettingsPage.qml">../qml/pages/SettingsPage.qml</file>
+        <file alias="qml/pages/TagsPage.qml">../qml/pages/TagsPage.qml</file>
+        <file alias="qml/pages/TrashPage.qml">../qml/pages/TrashPage.qml</file>
+    </qresource>
+</RCC>

@@ -2,6 +2,7 @@
 //!
 //! 基于 Tauri + React + TypeScript + Rust 构建
 
+pub mod adapters;
 pub mod commands;
 pub mod db;
 pub mod models;
@@ -34,6 +35,8 @@ use commands::{
     // trash
     get_deleted_photos, soft_delete_photos, restore_photos, permanent_delete_photos,
     empty_trash, get_trash_stats,
+    // search suggestions
+    get_search_suggestions,
     // tags
     create_tag, get_tag, get_tag_by_name, update_tag, delete_tag, get_all_tags,
     get_all_tags_with_count, add_tag_to_photo, add_tags_to_photo, remove_tag_from_photo,
@@ -44,6 +47,8 @@ use commands::{
     get_all_albums_with_count, add_photo_to_album, add_photos_to_album, remove_photo_from_album,
     remove_all_photos_from_album, get_photo_ids_in_album, get_albums_for_photo, set_album_cover,
     reorder_album_photos, remove_photos_from_album, get_recently_edited_album,
+    // smart albums
+    create_smart_album, get_smart_album, get_all_smart_albums, update_smart_album, delete_smart_album,
     // thumbnails
     generate_thumbnail, enqueue_thumbnail, enqueue_thumbnails_batch, cancel_thumbnail, get_thumbnail_cache_path,
     get_libraw_status, get_thumbnail_stats, check_thumbnails_cached, warm_thumbnail_cache, get_raw_preview,
@@ -74,6 +79,10 @@ use commands::{
     // auto_scan
     start_auto_scan, stop_auto_scan, get_auto_scan_status, get_directory_scan_states,
     reset_directory_scan_frequency, trigger_directory_scan,
+    // ocr
+    check_ocr_available, get_ocr_languages, get_ocr_stats, get_ocr_progress,
+    start_ocr_processing, stop_ocr_processing, ocr_single_photo, reset_ocr_status,
+    reset_failed_ocr, OcrState,
 };
 use db::Database;
 
@@ -197,6 +206,8 @@ pub fn run() {
             permanent_delete_photos,
             empty_trash,
             get_trash_stats,
+            // search suggestions
+            get_search_suggestions,
             // tags
             create_tag,
             get_tag,
@@ -231,6 +242,12 @@ pub fn run() {
             reorder_album_photos,
             remove_photos_from_album,
             get_recently_edited_album,
+            // smart albums
+            create_smart_album,
+            get_smart_album,
+            get_all_smart_albums,
+            update_smart_album,
+            delete_smart_album,
             // thumbnails
             generate_thumbnail,
             enqueue_thumbnail,
@@ -288,13 +305,26 @@ pub fn run() {
             get_directory_scan_states,
             reset_directory_scan_frequency,
             trigger_directory_scan,
+            // ocr
+            check_ocr_available,
+            get_ocr_languages,
+            get_ocr_stats,
+            get_ocr_progress,
+            start_ocr_processing,
+            stop_ocr_processing,
+            ocr_single_photo,
+            reset_ocr_status,
+            reset_failed_ocr,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();
             let startup_ready = Arc::new(AtomicBool::new(false));
 
             // 设置全局 AppHandle，用于 thumbnail_queue worker 发送事件
+            // 同时设置 photowall-core 的 EventSink
             services::thumbnail_queue::set_app_handle(app_handle.clone());
+            let event_sink = adapters::TauriEventSink::shared(app_handle.clone());
+            photowall_core::services::set_event_sink(event_sink);
 
             let settings = services::SettingsManager::new(&app_handle)
                 .and_then(|manager| manager.load())
@@ -416,6 +446,8 @@ pub fn run() {
             };
 
             app.manage(app_state);
+            app.manage(db.clone()); // For OCR commands
+            app.manage(OcrState::new());
 
             // Start/stop auto-scan service based on persisted settings.
             let app_handle = app.handle().clone();

@@ -75,6 +75,7 @@ export default function HomePage() {
       case 'fileName': sortValue = photo.fileName ?? null; break;
       case 'fileSize': sortValue = photo.fileSize ?? null; break;
       case 'rating': sortValue = photo.rating ?? null; break;
+      case 'relevance': sortValue = photo.relevanceScore ?? null; break;
       default: sortValue = photo.dateTaken ?? null; break;
     }
     return { sortValue, photoId: photo.photoId };

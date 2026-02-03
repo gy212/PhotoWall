@@ -54,6 +54,14 @@ export interface Photo {
   isDeleted: boolean;
   /** 删除时间 */
   deletedAt?: string;
+  /** 相关性评分（仅在搜索结果中返回） */
+  relevanceScore?: number;
+  /** OCR 识别的文字 */
+  ocrText?: string;
+  /** OCR 状态: 0=未处理, 1=已处理, 2=失败, 3=无文字 */
+  ocrStatus?: number;
+  /** OCR 处理时间 */
+  ocrProcessedAt?: string;
 }
 
 /**
@@ -137,7 +145,7 @@ export type SortOrder = 'asc' | 'desc';
 /**
  * 排序字段
  */
-export type SortField = 'dateTaken' | 'dateAdded' | 'fileName' | 'fileSize' | 'rating';
+export type SortField = 'dateTaken' | 'dateAdded' | 'fileName' | 'fileSize' | 'rating' | 'relevance';
 
 /**
  * 排序选项
@@ -170,12 +178,34 @@ export interface SearchFilters {
   albumId?: number;
   /** 相机型号 */
   cameraModel?: string;
+  /** 镜头型号 */
+  lensModel?: string;
   /** 最低评分 */
   minRating?: number;
+  /** 最高评分 */
+  maxRating?: number;
   /** 仅收藏 */
   favoritesOnly?: boolean;
+  /** 有 GPS 信息 */
+  hasGps?: boolean;
   /** 文件扩展名列表（用于RAW格式筛选） */
   fileExtensions?: string[];
+
+  // ========== EXIF 过滤字段 ==========
+  /** ISO 最小值 */
+  isoMin?: number;
+  /** ISO 最大值 */
+  isoMax?: number;
+  /** 光圈最小值 */
+  apertureMin?: number;
+  /** 光圈最大值 */
+  apertureMax?: number;
+  /** 焦距最小值 */
+  focalLengthMin?: number;
+  /** 焦距最大值 */
+  focalLengthMax?: number;
+  /** 快门速度（精确匹配，如 "1/250"） */
+  shutterSpeed?: string;
 }
 
 /**
@@ -500,3 +530,49 @@ export const DEFAULT_ADJUSTMENTS: EditAdjustments = {
   blur: 0,
   vignette: 0,
 };
+
+// ============ OCR 类型 ============
+
+/**
+ * OCR 状态枚举
+ */
+export enum OcrStatus {
+  /** 未处理 */
+  Pending = 0,
+  /** 已处理 */
+  Processed = 1,
+  /** 处理失败 */
+  Failed = 2,
+  /** 无文字 */
+  NoText = 3,
+}
+
+/**
+ * OCR 处理进度
+ */
+export interface OcrProgress {
+  /** 总数 */
+  total: number;
+  /** 已处理数 */
+  processed: number;
+  /** 失败数 */
+  failed: number;
+  /** 是否正在运行 */
+  isRunning: boolean;
+}
+
+/**
+ * OCR 统计信息
+ */
+export interface OcrStats {
+  /** 总照片数 */
+  totalPhotos: number;
+  /** 待处理数 */
+  pending: number;
+  /** 已处理数 */
+  processed: number;
+  /** 失败数 */
+  failed: number;
+  /** 无文字数 */
+  noText: number;
+}

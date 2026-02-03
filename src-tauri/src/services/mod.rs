@@ -16,6 +16,8 @@ pub mod editor;
 pub mod colorspace;
 pub mod native_editor;
 pub mod auto_scan;
+pub mod query_parser;
+pub mod ocr;
 
 // 重新导出常用类型
 pub use scanner::{Scanner, ScanOptions, ScanResult, ScanProgress, is_image_file, SUPPORTED_FORMATS};
@@ -28,3 +30,5 @@ pub use watcher::{FileWatcher, WatcherConfig, FileChangeEvent, FileChangeType};
 pub use settings::SettingsManager;
 pub use editor::{EditorService, EditParams, EditOperation, FlipDirection, CropRect};
 pub use auto_scan::{AutoScanManager, AutoScanStatus, StepScanConfig};
+pub use query_parser::{QueryParser, ParsedQuery, FieldFilter, FieldOperator};
+pub use ocr::{OcrService, OcrResult, OcrProgress, OcrStats, OcrConfig, OcrStatus};

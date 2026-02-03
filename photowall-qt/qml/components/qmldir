@@ -1,0 +1,15 @@
+module PhotoWall.Components
+ContextMenu 1.0 ContextMenu.qml
+Sidebar 1.0 Sidebar.qml
+Toolbar 1.0 Toolbar.qml
+SearchPanel 1.0 SearchPanel.qml
+PhotoThumbnail 1.0 PhotoThumbnail.qml
+Icon 1.0 Icon.qml
+PhotoGrid 1.0 PhotoGrid.qml
+ThemedScrollBar 1.0 ThemedScrollBar.qml
+GridBackground 1.0 GridBackground.qml
+WindowControls 1.0 WindowControls.qml
+FolderTreeItem 1.0 FolderTreeItem.qml
+HeroSection 1.0 HeroSection.qml
+TagRibbon 1.0 TagRibbon.qml
+ContentShelf 1.0 ContentShelf.qml

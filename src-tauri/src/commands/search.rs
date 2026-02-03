@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use tauri::State;
 
-use crate::db::photo_dao::{PhotoStats, TrashStats};
+use crate::db::photo_dao::{PhotoStats, TrashStats, SearchSuggestion};
 use crate::models::{
     PaginatedResult, PaginationParams, Photo, PhotoCursor, PhotoSortOptions, SearchFilters,
     SearchResult,
@@ -283,4 +283,18 @@ pub async fn empty_trash(state: State<'_, AppState>) -> Result<usize, String> {
 #[tauri::command]
 pub async fn get_trash_stats(state: State<'_, AppState>) -> Result<TrashStats, String> {
     state.db.get_trash_stats().map_err(|e| e.to_string())
+}
+
+/// 获取搜索建议
+#[tauri::command]
+pub async fn get_search_suggestions(
+    state: State<'_, AppState>,
+    prefix: String,
+    limit: Option<u32>,
+) -> Result<Vec<SearchSuggestion>, String> {
+    let limit = limit.unwrap_or(10);
+    state
+        .db
+        .get_search_suggestions(&prefix, limit)
+        .map_err(|e| e.to_string())
 }

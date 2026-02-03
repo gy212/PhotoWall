@@ -248,6 +248,45 @@ body *::-webkit-scrollbar-thumb:hover,
       0 12px 24px -4px rgba(0, 0, 0, 0.5);
   }
 
+  .hue-slider {
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 9999px;
+    height: 100%;
+    outline: none;
+  }
+
+  .hue-slider::-webkit-slider-runnable-track {
+    height: 100%;
+    border-radius: 9999px;
+    background: inherit;
+  }
+
+  .hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 18px;
+    width: 18px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 2px var(--primary), 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
+  .hue-slider::-moz-range-track {
+    height: 100%;
+    border-radius: 9999px;
+    background: inherit;
+  }
+
+  .hue-slider::-moz-range-thumb {
+    height: 18px;
+    width: 18px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 2px var(--primary), 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+
   /* 网格写字本背景 - 底部装饰 */
   .card-grid-bottom {
     background-image:

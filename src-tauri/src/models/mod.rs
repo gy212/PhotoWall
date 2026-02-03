@@ -84,6 +84,8 @@ pub enum PhotoSortField {
     FileName,
     FileSize,
     Rating,
+    /// 相关性排序（仅在 FTS 搜索时有效）
+    Relevance,
 }
 
 impl PhotoSortField {
@@ -94,7 +96,13 @@ impl PhotoSortField {
             PhotoSortField::FileName => "file_name",
             PhotoSortField::FileSize => "file_size",
             PhotoSortField::Rating => "rating",
+            PhotoSortField::Relevance => "relevance_score",
         }
+    }
+
+    /// 是否为相关性排序
+    pub fn is_relevance(&self) -> bool {
+        matches!(self, PhotoSortField::Relevance)
     }
 }
 
@@ -145,6 +153,22 @@ pub struct SearchFilters {
     pub has_gps: Option<bool>,
     /// 文件扩展名列表（用于RAW格式筛选）
     pub file_extensions: Option<Vec<String>>,
+
+    // ========== EXIF 过滤字段 ==========
+    /// ISO 最小值
+    pub iso_min: Option<i32>,
+    /// ISO 最大值
+    pub iso_max: Option<i32>,
+    /// 光圈最小值
+    pub aperture_min: Option<f64>,
+    /// 光圈最大值
+    pub aperture_max: Option<f64>,
+    /// 焦距最小值
+    pub focal_length_min: Option<f64>,
+    /// 焦距最大值
+    pub focal_length_max: Option<f64>,
+    /// 快门速度（精确匹配，如 "1/250"）
+    pub shutter_speed: Option<String>,
 }
 
 /// 搜索结果
