@@ -2,11 +2,11 @@
 
 **版本：v0.1.0**
 
-> ⚠️ **Qt 分支说明（开发中）**：此 `qt` 分支用于尝试/迁移 **Qt/QML** 版本（目录：`photowall-qt/`），功能与主分支可能不一致，随时可能重构。
+> ⚠️ **Qt 分支说明（开发中）**：此 `qt` 分支用于尝试/迁移 **Qt/QML** 版本（目录：`photowall-qt/`），功能与主分支可能不一致，随时可能重构。`main` 分支为 Web/Tauri 版本。
 
 > ⚠️ **项目状态**：本项目仍在积极开发中，部分功能可能不完善。
 
-PhotoWall 是一款基于 **Tauri + React + TypeScript + Vite** 的 Windows 桌面照片管理软件，专注于本地照片的浏览、索引与整理体验。
+PhotoWall 是一款本地照片管理软件。本分支为 **Qt/QML** 前端版本（`photowall-qt/`），并使用 Rust 核心库/FFI（`src-tauri/crates/`）。
 
 ---
 
